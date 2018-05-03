@@ -4,6 +4,7 @@ use std::rc::Rc;
 use instructions::arm;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
+pub const PC_OFFSET: usize = 2;
 
 enum Arm {
 	NOP,
@@ -41,9 +42,9 @@ pub const PC: usize = 15;
 struct CpuBus;
 
 pub struct ARMv4<T> {
+	pub gpr: [u32; 16],
 	bus: Rc<RefCell<T>>,
 	pipeline_wait: u8,
-	gpr: [u32; 16],
 	cpsr: PSR,
 	spsr: [PSR; 7],
 	mode: CpuMode,
@@ -111,7 +112,8 @@ where
 			arm::Opcode::LDR => self.ldr(inst),
 			arm::Opcode::STR => self.str(inst),
 			arm::Opcode::MOV => self.mov(inst),
-			arm::Opcode::DataProcessing => unimplemented!(),
+			arm::Opcode::B => self.branch(inst),
+			arm::Opcode::BL => unimplemented!(),
 			arm::Opcode::Undefined => unimplemented!(),
 			arm::Opcode::NOP => unimplemented!(),
 			// arm::Opcode::SWI => unimplemented!(),
@@ -123,9 +125,9 @@ where
 		let mut base = self.gpr[inst.get_Rn()];
 		// INFO: Treat as imm12 if not I.
 		if !inst.has_I() {
-			let src2 = inst.get_src2() as isize;
-			let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as Word;
-			base += offset;
+			let src2 = inst.get_src2() as i32;
+			let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32;
+			base = (base as i32 + offset) as Word;
 		} else {
 			// TODO: implement later
 		}
@@ -147,14 +149,27 @@ where
 		Ok(())
 	}
 
+	fn branch(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+		let imm = inst.get_imm24() as u32;
+		let imm = (if imm & 0x0080_0000 != 0 {
+			imm | 0xFF00_0000
+		} else {
+			imm
+		}) as i32;
+		self.gpr[PC] = (self.gpr[PC] as i32 + imm * 4) as Word;
+		self.flush_pipeline();
+		Ok(())
+	}
+
 	pub fn tick(&mut self) -> Result<(), ()> {
 		if self.pipeline_wait > 0 {
 			self.pipeline_wait -= 1;
+			self.increment_pc();
 			return Ok(());
 		}
 		match self.state {
 			CpuState::ARM => {
-				let fetched = self.bus.borrow().read_word(self.gpr[PC]);
+				let fetched = self.bus.borrow().read_word(self.gpr[PC - PC_OFFSET]);
 				debug!("fetched code = {:x}", fetched);
 				let decoded = arm::Instruction::decode(fetched);
 				self.execute(decoded)
@@ -215,7 +230,7 @@ mod test {
 
 	#[test]
 	// ldr pc, =0x8000_0000
-	fn ldr_pc_eq0x8000_8000() {
+	fn ldr_pc_eq0x8000_0000() {
 		setup();
 		let mut bus = MockBus::new();
 		&bus.set(0x0, 0xE51F_F004);
@@ -234,5 +249,16 @@ mod test {
 		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
 		arm.run_immediately();
 		assert_eq!(arm.gpr[0x00], 0x0000_0001);
+	}
+
+	#[test]
+	// b pc-2
+	fn b_pc_sub_3() {
+		setup();
+		let mut bus = MockBus::new();
+		&bus.set(0x0000_0000, 0xEAFF_FFFE);
+		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+		arm.run_immediately();
+		assert_eq!(arm.gpr[PC], 0x0000_0000);
 	}
 }
