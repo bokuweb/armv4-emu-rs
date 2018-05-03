@@ -37,6 +37,8 @@ impl PSR {
 	}
 }
 
+pub const SP: usize = 13;
+pub const LR: usize = 14;
 pub const PC: usize = 15;
 
 struct CpuBus;
@@ -65,8 +67,6 @@ impl<T> ARMv4<T>
 where
 	T: Bus,
 {
-	pub const SP: usize = 13;
-	pub const LR: usize = 14;
 	pub fn new(bus: Rc<RefCell<T>>) -> ARMv4<T>
 	where
 		T: Bus,
@@ -109,11 +109,11 @@ where
 	fn execute(&mut self, inst: arm::Instruction) -> Result<(), ()> {
 		debug!("decoded instruction = {:?}", inst);
 		match inst.opcode {
-			arm::Opcode::LDR => self.ldr(inst),
-			arm::Opcode::STR => self.str(inst),
-			arm::Opcode::MOV => self.mov(inst),
-			arm::Opcode::B => self.branch(inst),
-			arm::Opcode::BL => unimplemented!(),
+			arm::Opcode::LDR => self.exec_ldr(inst),
+			arm::Opcode::STR => self.exec_str(inst),
+			arm::Opcode::MOV => self.exec_mov(inst),
+			arm::Opcode::B => self.exec_b(inst),
+			arm::Opcode::BL => self.exec_bl(inst),
 			arm::Opcode::Undefined => unimplemented!(),
 			arm::Opcode::NOP => unimplemented!(),
 			// arm::Opcode::SWI => unimplemented!(),
@@ -121,7 +121,7 @@ where
 		}
 	}
 
-	fn ldr(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+	fn exec_ldr(&mut self, inst: arm::Instruction) -> Result<(), ()> {
 		let mut base = self.gpr[inst.get_Rn()];
 		// INFO: Treat as imm12 if not I.
 		if !inst.has_I() {
@@ -135,11 +135,11 @@ where
 		Ok(())
 	}
 
-	fn str(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+	fn exec_str(&mut self, inst: arm::Instruction) -> Result<(), ()> {
 		Ok(())
 	}
 
-	fn mov(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+	fn exec_mov(&mut self, inst: arm::Instruction) -> Result<(), ()> {
 		if inst.has_I() {
 			let src2 = inst.get_src2();
 			self.gpr[inst.get_Rd()] = src2 as Word;
@@ -149,7 +149,12 @@ where
 		Ok(())
 	}
 
-	fn branch(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+	fn exec_bl(&mut self, inst: arm::Instruction) -> Result<(), ()> {
+		self.gpr[LR] = self.gpr[PC] - 4;
+		self.exec_b(inst)
+	}
+
+	fn exec_b(&mut self, inst: arm::Instruction) -> Result<(), ()> {
 		let imm = inst.get_imm24() as u32;
 		let imm = (if imm & 0x0080_0000 != 0 {
 			imm | 0xFF00_0000
@@ -177,6 +182,10 @@ where
 			// TODO: Thumb mode
 			_ => unimplemented!(),
 		}
+	}
+
+	pub fn get_gpr(&self, n: usize) -> Word {
+		self.gpr[n]
 	}
 }
 
@@ -229,6 +238,16 @@ mod test {
 	}
 
 	#[test]
+	// tick
+	fn increment_pc_by_tick() {
+		setup();
+		let mut bus = MockBus::new();
+		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+		arm.tick();
+		assert_eq!(arm.get_gpr(PC), 0x0000_0004);
+	}
+
+	#[test]
 	// ldr pc, =0x8000_0000
 	fn ldr_pc_eq0x8000_0000() {
 		setup();
@@ -237,7 +256,7 @@ mod test {
 		&bus.set(0x4, 0x8000_0000);
 		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
 		arm.run_immediately();
-		assert_eq!(arm.gpr[PC], 0x8000_0000);
+		assert_eq!(arm.get_gpr(PC), 0x8000_0000);
 	}
 
 	#[test]
@@ -248,17 +267,29 @@ mod test {
 		&bus.set(0x0, 0xE3A0_0001);
 		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
 		arm.run_immediately();
-		assert_eq!(arm.gpr[0x00], 0x0000_0001);
+		assert_eq!(arm.get_gpr(0), 0x0000_0001);
 	}
 
 	#[test]
 	// b pc-2
-	fn b_pc_sub_3() {
+	fn b_pc_sub_2() {
 		setup();
 		let mut bus = MockBus::new();
 		&bus.set(0x0000_0000, 0xEAFF_FFFE);
 		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
 		arm.run_immediately();
-		assert_eq!(arm.gpr[PC], 0x0000_0000);
+		assert_eq!(arm.get_gpr(PC), 0x0000_0000);
+	}
+
+	#[test]
+	// bl pc-2
+	fn bl_pc_sub_2() {
+		setup();
+		let mut bus = MockBus::new();
+		&bus.set(0x0000_0000, 0xEBFF_FFFE);
+		let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+		arm.run_immediately();
+		assert_eq!(arm.get_gpr(PC), 0x0000_0000);
+		assert_eq!(arm.get_gpr(LR), 0x0000_0004);
 	}
 }
