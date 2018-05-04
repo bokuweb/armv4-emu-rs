@@ -1,10 +1,34 @@
+extern crate env_logger;
 extern crate goblin;
+#[macro_use]
+extern crate log;
+extern crate byteorder;
+
+mod constants;
+mod core;
+mod instructions;
+mod registers;
+mod types;
+
+use constants::*;
+use std::cell::RefCell;
+use std::rc::Rc;
+use types::Word;
+
 use goblin::{error, Object};
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+struct CpuBus;
+
+impl core::Bus for CpuBus {
+    fn read_word(&self, addr: u32) -> Word {
+        0
+    }
+}
 
 fn memory_elf(
     elf_obj: goblin::elf::Elf,
@@ -67,6 +91,10 @@ fn main() {
             let result = load_elf(arg);
         }
     }
+    env_logger::init();
+    let bus = CpuBus;
+    let mut arm = core::ARMv4::new(Rc::new(RefCell::new(bus)));
+    arm.tick();
 }
 
 /*
