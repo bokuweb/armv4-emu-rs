@@ -36,10 +36,10 @@ enum Arm {
     NOP_RAW,
 }
 
-enum PipelineState {
-    WAIT,
-    Ready,
-}
+//enum PipelineState {
+//    WAIT,
+//    Ready,
+//}
 
 enum CpuMode {
     System,

@@ -9,11 +9,14 @@ mod core;
 mod instructions;
 mod registers;
 mod types;
+mod memory;
 
 use constants::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use types::Word;
+use memory::readable::*;
+use memory::writable::*;
 
 use goblin::{error, Object};
 use std::collections::HashMap;
@@ -30,25 +33,26 @@ impl core::Bus for CpuBus {
     }
 }
 
-fn memory_elf(
-    elf_obj: goblin::elf::Elf,
-    memory: &mut std::collections::HashMap<u64, u8>,
-    buffer: &std::vec::Vec<u8>,
-) -> error::Result<()> {
+fn memory_elf(elf_obj: goblin::elf::Elf,
+              memory: &mut std::collections::HashMap<u64, u8>,
+              buffer: &std::vec::Vec<u8>)
+              -> error::Result<()> {
     let shdr_strtab = &elf_obj.shdr_strtab;
     println!("{:?}", &elf_obj);
     for section in &elf_obj.section_headers {
-        println!(
-            "elf_obj.section_headers = {:#?}, file_offset = {:#x}, size = {:#x}",
-            &shdr_strtab[section.sh_name], section.sh_offset, section.sh_size
-        );
+        println!("elf_obj.section_headers = {:#?}, file_offset = {:#x}, size = {:#x}, type = {:#?} flags = {:#?}",
+                 &shdr_strtab[section.sh_name],
+                 section.sh_offset,
+                 section.sh_size,
+                 section.sh_type,
+                 section.sh_flags);
         if section.sh_size != 0 {
             for idx in 0..(section.sh_size) {
                 let mut offset = idx + section.sh_offset;
-                println!(
-                    "adr {:X} idx {} data {:x}",
-                    section.sh_addr, idx, buffer[offset as usize]
-                );
+                println!("adr {:X} idx {} data {:x}",
+                         section.sh_addr,
+                         idx,
+                         buffer[offset as usize]);
 
                 memory.insert(section.sh_addr + idx, buffer[offset as usize]);
             }
@@ -95,6 +99,12 @@ fn main() {
     let bus = CpuBus;
     let mut arm = core::ARMv4::new(Rc::new(RefCell::new(bus)));
     arm.tick();
+    let rom = memory::rom::Rom::new(vec![1]);
+    println!("{}", rom.read_byte(0));
+    let mut ram = memory::ram::Ram::new(vec![0,0,0,1]);
+    println!("{:x}", ram.read_word(0));    
+    ram.write_word(0, 0xaaaa55aa);
+    println!("{:x}", ram.read_word(0));    
 }
 
 /*
