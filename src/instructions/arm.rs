@@ -6,6 +6,7 @@ pub enum Category {
     Undefined,
     Memory,
     DataProcessing,
+    Branch,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -13,9 +14,11 @@ pub enum Opcode {
     LDR,
     STR,
     MOV,
-    // SWI,
+    B,
+    BL,
     Undefined,
-    DataProcessing,
+    // DataProcessing,
+    // SWI,
     NOP,
 }
 
@@ -48,22 +51,6 @@ pub struct Instruction {
 
 pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
-fn decode_memory_instruction(fetched: Word) -> Opcode {
-    match fetched {
-        v if (v & 0x0000_0800) == 0x0000_0000 => Opcode::LDR,
-        v if (v & 0x0000_0800) == 0x0000_0800 => Opcode::STR,
-        _ => panic!("unsupported instruction"),
-    }
-}
-
-fn decode_data_processing_instruction(fetched: Word) -> Opcode {
-    let cmd = (fetched & 0x01E0_0000) >> 21;
-    match cmd {
-        0b1101 => Opcode::MOV,
-        _ => panic!("unsupported instruction"),
-    }
-}
-
 impl Instruction {
     pub fn opcode(&self) -> Opcode {
         self.opcode.clone()
@@ -71,6 +58,31 @@ impl Instruction {
 
     pub fn is_load(&self) -> bool {
         0 != (self.raw & (1 << 11))
+    }
+
+    fn decode_memory(fetched: Word) -> Opcode {
+        match fetched {
+            v if (v & 0x0000_0800) == 0x0000_0000 => Opcode::LDR,
+            v if (v & 0x0000_0800) == 0x0000_0800 => Opcode::STR,
+            _ => panic!("unsupported instruction"),
+        }
+    }
+
+    fn decode_data_processing(fetched: Word) -> Opcode {
+        let cmd = (fetched & 0x01E0_0000) >> 21;
+        match cmd {
+            0b1101 => Opcode::MOV,
+            _ => panic!("unsupported instruction"),
+        }
+    }
+
+    fn decode_branch(fetched: Word) -> Opcode {
+        let with_link = fetched & 0x0100_0000 != 0;
+        if with_link {
+            Opcode::BL
+        } else {
+            Opcode::B
+        }
     }
 
     pub fn decode(fetched: Word) -> Instruction {
@@ -81,6 +93,7 @@ impl Instruction {
         };
 
         let category = match fetched {
+            v if (v & 0x0E00_0000) == 0x0A00_0000 => Category::Branch,
             v if (v & 0x0E00_0010) == 0x0600_0010 => Category::Undefined,
             v if (v & 0x0C00_0000) == 0x0400_0000 => Category::Memory,
             v if (v & 0x0C00_0000) == 0x0000_0000 => Category::DataProcessing,
@@ -90,8 +103,9 @@ impl Instruction {
 
         let opcode = match category {
             Category::Undefined => Opcode::Undefined,
-            Category::Memory => decode_memory_instruction(fetched),
-            Category::DataProcessing => decode_data_processing_instruction(fetched),
+            Category::Memory => Instruction::decode_memory(fetched),
+            Category::DataProcessing => Instruction::decode_data_processing(fetched),
+            Category::Branch => Instruction::decode_branch(fetched),
             // v if (v & 0x0F00_0000) == 0x0F00_0000 => Opcode::SWI,
             _ => panic!("unsupported instruction"),
         };
@@ -114,9 +128,12 @@ impl Instruction {
         (self.raw as usize >> 12) & 0b1111
     }
 
-    #[allow(non_snake_case)]
     pub fn get_src2(&self) -> usize {
         (self.raw as usize) & 0x0fff
+    }
+
+    pub fn get_imm24(&self) -> i32 {
+        self.raw as i32 & 0xff_ffff
     }
 
     pub fn has_I(&self) -> bool {
@@ -124,10 +141,14 @@ impl Instruction {
     }
 
     pub fn is_plus_offset(&self) -> bool {
-        self.raw & 0x0080_0000 == 0
+        self.raw & 0x0080_0000 != 0
     }
 
     pub fn is_minus_offset(&self) -> bool {
         !self.is_plus_offset()
     }
+
+    // fn is_branch_with_link(&self) -> bool {
+    //     self.raw & 0x0100_0000 != 0
+    // }
 }
