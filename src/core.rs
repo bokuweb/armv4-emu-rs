@@ -1,8 +1,8 @@
 use std::cell::RefCell;
-use std::rc::Rc;
-use std::result::Result::Err;
 use std::error;
 use std::fmt;
+use std::rc::Rc;
+use std::result::Result::Err;
 
 use instructions::arm;
 
@@ -13,7 +13,6 @@ pub const PC_OFFSET: usize = 2;
 pub enum ArmError {
     UnknownError,
 }
-
 
 impl error::Error for ArmError {
     fn description(&self) -> &str {
@@ -74,7 +73,10 @@ pub const PC: usize = 15;
 
 struct CpuBus;
 
-pub struct ARMv4<T> {
+pub struct ARMv4<T>
+where
+    T: Bus,
+{
     pub gpr: [u32; 16],
     bus: Rc<RefCell<T>>,
     pipeline_wait: u8,
@@ -95,10 +97,12 @@ pub trait Bus {
 }
 
 impl<T> ARMv4<T>
-    where T: Bus
+where
+    T: Bus,
 {
     pub fn new(bus: Rc<RefCell<T>>) -> ARMv4<T>
-        where T: Bus
+    where
+        T: Bus,
     {
         ARMv4 {
             bus: bus,
@@ -199,10 +203,10 @@ impl<T> ARMv4<T>
     fn exec_b(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         let imm = inst.get_imm24() as u32;
         let imm = (if imm & 0x0080_0000 != 0 {
-                       imm | 0xFF00_0000
-                   } else {
-                       imm
-                   }) as i32;
+            imm | 0xFF00_0000
+        } else {
+            imm
+        }) as i32;
         self.gpr[PC] = (self.gpr[PC] as i32 + imm * 4) as Word;
         Ok(PipelineStatus::Flush)
     }
@@ -213,9 +217,12 @@ impl<T> ARMv4<T>
             self.increment_pc();
             return Ok(());
         }
+        debug!("registers = {:?}", self.gpr);
         match self.state {
             CpuState::ARM => {
-                let fetched = self.bus.borrow().read_word(self.gpr[PC - PC_OFFSET]);
+                let fetched = self.bus
+                    .borrow()
+                    .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
                 let decoded = arm::Instruction::decode(fetched);
                 self.execute(decoded)
