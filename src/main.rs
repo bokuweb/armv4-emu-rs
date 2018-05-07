@@ -17,6 +17,8 @@ use std::rc::Rc;
 use types::Word;
 use memory::readable::*;
 use memory::writable::*;
+use memory::rom::Rom;
+use memory::ram::Ram;
 
 use goblin::{error, Object};
 use std::collections::HashMap;
@@ -25,20 +27,30 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-struct CpuBus;
+struct CpuBus {
+    rom: Rc<RefCell<Rom>>,
+    ram: Rc<RefCell<Ram>>,
+}
 
 impl core::Bus for CpuBus {
     fn read_word(&self, addr: u32) -> Word {
-        0
+        match addr {
+            0x0000_0000...0x0007_FFFF => self.rom.borrow().read_word(addr),
+            _ => panic!("TODO: "),
+        }
     }
 }
 
-fn memory_elf(elf_obj: goblin::elf::Elf,
-              memory: &mut std::collections::HashMap<u64, u8>,
-              buffer: &std::vec::Vec<u8>)
-              -> error::Result<()> {
+impl CpuBus {
+    fn new(rom: Rc<RefCell<Rom>>, ram: Rc<RefCell<Ram>>) -> CpuBus {
+        CpuBus { rom, ram }
+    }
+}
+
+fn memory_elf(elf_obj: goblin::elf::Elf, buffer: &Vec<u8>) -> HashMap<u64, u8> {
     let shdr_strtab = &elf_obj.shdr_strtab;
     println!("{:?}", &elf_obj);
+    let mut memory = HashMap::new();
     for section in &elf_obj.section_headers {
         println!("elf_obj.section_headers = {:#?}, file_offset = {:#x}, size = {:#x}, type = {:#?} flags = {:#?}",
                  &shdr_strtab[section.sh_name],
@@ -49,25 +61,22 @@ fn memory_elf(elf_obj: goblin::elf::Elf,
         if section.sh_size != 0 {
             for idx in 0..(section.sh_size) {
                 let mut offset = idx + section.sh_offset;
-                println!("adr {:X} idx {} data {:x}",
-                         section.sh_addr,
-                         idx,
-                         buffer[offset as usize]);
-
-                memory.insert(section.sh_addr + idx, buffer[offset as usize]);
+                if section.sh_type == 1 {
+                    memory.insert(section.sh_addr + idx, buffer[offset as usize]);
+                }
             }
         }
     }
-    Ok(())
+    memory
 }
 
-fn dump_memory(memory: &std::collections::HashMap<u64, u8>) {
+fn dump_memory(memory: &HashMap<u64, u8>) {
     for (addr, data) in memory.iter() {
         println!("{:#x}: {:#02x}", addr, data);
     }
 }
 
-fn load_elf(hexfile: String) -> error::Result<()> {
+fn load_elf(hexfile: String) -> Result<(), goblin::error::Error> {
     let path = Path::new(&hexfile);
     let mut fd = File::open(path)?;
     let mut buffer = Vec::new();
@@ -75,10 +84,8 @@ fn load_elf(hexfile: String) -> error::Result<()> {
 
     match Object::parse(&buffer)? {
         Object::Elf(elf) => {
-            let mut memory = HashMap::new();
-            // let mut my_number: () = memory;
-            memory_elf(elf, &mut memory, &buffer);
-            // dump_memory(&mut memory)
+            let mut memory = memory_elf(elf, &buffer);
+            dump_memory(&mut memory)
         }
         _ => {
             println!("not supported.");
@@ -87,56 +94,39 @@ fn load_elf(hexfile: String) -> error::Result<()> {
     Ok(())
 }
 
-fn main() {
-    match env::args().nth(1) {
-        None => println!("Specify filename to build."),
-        Some(arg) => {
-            println!("{}", arg);
-            let result = load_elf(arg);
-        }
-    }
-    env_logger::init();
-    let bus = CpuBus;
-    let mut arm = core::ARMv4::new(Rc::new(RefCell::new(bus)));
-    arm.tick();
-    let rom = memory::rom::Rom::new(vec![1]);
-    println!("{}", rom.read_byte(0));
-    let mut ram = memory::ram::Ram::new(vec![0,0,0,1]);
-    println!("{:x}", ram.read_word(0));    
-    ram.write_word(0, 0xaaaa55aa);
-    println!("{:x}", ram.read_word(0));    
+fn load_bin(bin: String) -> Result<Vec<u8>, std::io::Error> {
+    let path = Path::new(&bin);
+    let mut fd = File::open(path)?;
+    let mut buf = Vec::new();
+    fd.read_to_end(&mut buf)?;
+    Ok(buf)
 }
 
-/*
-
-extern crate env_logger;
-#[macro_use]
-extern crate log;
-extern crate byteorder;
-
-mod types;
-mod core;
-mod registers;
-mod constants;
-mod instructions;
-
-use std::cell::RefCell;
-use std::rc::Rc;
-use constants::*;
-use types::Word;
-
-struct CpuBus;
-
-impl core::Bus for CpuBus {
-    fn read_word(&self, addr: u32) -> Word {
-        0
-    }
-}
 
 fn main() {
     env_logger::init();
-    let bus = CpuBus;
+    // let elf_path = env::args().nth(1).expect("");
+    // let result = load_elf(elf_path);
+    let bin_path = env::args()
+        .nth(1)
+        .expect("Specify bin filename to build.");
+    let bin = load_bin(bin_path).expect("faild to read bin");
+    debug!("read bin data = {:?}", bin);
+    let rom = memory::rom::Rom::new(0x80000, bin);
+    let ram = memory::ram::Ram::new(vec![0; 0x10000]);
+    let bus = CpuBus::new(Rc::new(RefCell::new(rom)), Rc::new(RefCell::new(ram)));
     let mut arm = core::ARMv4::new(Rc::new(RefCell::new(bus)));
     arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
 }
-*/

@@ -1,5 +1,3 @@
-#include "armpsr.h"
-
 	.section .vector,"ax"
 	.arm
 	.align 0
