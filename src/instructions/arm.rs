@@ -12,7 +12,9 @@ pub enum Category {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Opcode {
     LDR,
+    LDRB,
     STR,
+    STRB,
     MOV,
     B,
     BL,
@@ -56,13 +58,11 @@ impl Instruction {
         self.opcode.clone()
     }
 
-    pub fn is_load(&self) -> bool {
-        0 != (self.raw & (1 << 11))
-    }
-
     fn decode_memory(fetched: Word) -> Opcode {
         match fetched {
+            v if (v & 0x0040_0800) == 0x0040_0000 => Opcode::LDRB,
             v if (v & 0x0000_0800) == 0x0000_0000 => Opcode::LDR,
+            v if (v & 0x0040_0800) == 0x0040_0800 => Opcode::STRB,
             v if (v & 0x0000_0800) == 0x0000_0800 => Opcode::STR,
             _ => panic!("unsupported instruction"),
         }
@@ -139,6 +139,10 @@ impl Instruction {
     pub fn has_I(&self) -> bool {
         self.raw & 0x0200_0000 != 0
     }
+
+    // pub fn has_B(&self) -> bool {
+    //     self.raw & 0x0040_0000 != 0
+    // }    
 
     pub fn is_plus_offset(&self) -> bool {
         self.raw & 0x0080_0000 != 0

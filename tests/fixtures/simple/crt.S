@@ -10,7 +10,8 @@ __reset:
 	.align 0
 	.global reset_entry
 reset_entry:
-  mov r0, #1
+  mov r0, #1234
+	ldrb r1, [r0]
 loop:
   mov r0, #2
   b loop

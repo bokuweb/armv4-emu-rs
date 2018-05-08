@@ -1,10 +1,11 @@
 use std::cell::RefCell;
-use std::rc::Rc;
-use std::result::Result::Err;
 use std::error;
 use std::fmt;
+use std::rc::Rc;
+use std::result::Result::Err;
 
 use instructions::arm;
+use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
 pub const PC_OFFSET: usize = 2;
@@ -13,7 +14,6 @@ pub const PC_OFFSET: usize = 2;
 pub enum ArmError {
     UnknownError,
 }
-
 
 impl error::Error for ArmError {
     fn description(&self) -> &str {
@@ -75,7 +75,8 @@ pub const PC: usize = 15;
 struct CpuBus;
 
 pub struct ARMv4<T>
-    where T: Bus
+where
+    T: Bus,
 {
     pub gpr: [u32; 16],
     bus: Rc<RefCell<T>>,
@@ -93,14 +94,17 @@ type Word = u32;
 type HalfWord = u16;
 
 pub trait Bus {
+    fn read_byte(&self, addr: u32) -> Byte;
     fn read_word(&self, addr: u32) -> Word;
 }
 
 impl<T> ARMv4<T>
-    where T: Bus
+where
+    T: Bus,
 {
     pub fn new(bus: Rc<RefCell<T>>) -> ARMv4<T>
-        where T: Bus
+    where
+        T: Bus,
     {
         ARMv4 {
             bus: bus,
@@ -142,6 +146,8 @@ impl<T> ARMv4<T>
         let pipeline_status = match inst.opcode {
             arm::Opcode::LDR => self.exec_ldr(inst)?,
             arm::Opcode::STR => self.exec_str(inst)?,
+            arm::Opcode::LDRB => self.exec_ldrb(inst)?,
+            arm::Opcode::STRB => unimplemented!(),
             arm::Opcode::MOV => self.exec_mov(inst)?,
             arm::Opcode::B => self.exec_b(inst)?,
             arm::Opcode::BL => self.exec_bl(inst)?,
@@ -157,6 +163,27 @@ impl<T> ARMv4<T>
             PipelineStatus::Flush => self.flush_pipeline(),
         };
         Ok(())
+    }
+
+    #[allow(non_snake_case)]
+    fn exec_ldrb(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
+        let mut base = self.gpr[inst.get_Rn()];
+        // INFO: Treat as imm12 if not I.
+        if !inst.has_I() {
+            let src2 = inst.get_src2() as i32;
+            let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32;
+            base = (base as i32 + offset) as Word;
+        } else {
+            debug!(" TODO: implement later");
+            unimplemented!();
+        }
+        let Rd = inst.get_Rd();
+        self.gpr[Rd] = self.bus.borrow().read_byte(base) as Word;
+        if Rd == PC {
+            Ok(PipelineStatus::Flush)
+        } else {
+            Ok(PipelineStatus::Continue)
+        }
     }
 
     #[allow(non_snake_case)]
@@ -201,10 +228,10 @@ impl<T> ARMv4<T>
     fn exec_b(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         let imm = inst.get_imm24() as u32;
         let imm = (if imm & 0x0080_0000 != 0 {
-                       imm | 0xFF00_0000
-                   } else {
-                       imm
-                   }) as i32;
+            imm | 0xFF00_0000
+        } else {
+            imm
+        }) as i32;
         self.gpr[PC] = (self.gpr[PC] as i32 + imm * 4) as Word;
         Ok(PipelineStatus::Flush)
     }
@@ -215,10 +242,12 @@ impl<T> ARMv4<T>
             self.increment_pc();
             return Ok(());
         }
-		debug!("registers = {:?}", self.gpr);
+        debug!("registers = {:?}", self.gpr);
         match self.state {
             CpuState::ARM => {
-                let fetched = self.bus.borrow().read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
+                let fetched = self.bus
+                    .borrow()
+                    .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
                 let decoded = arm::Instruction::decode(fetched);
                 self.execute(decoded)
@@ -230,6 +259,10 @@ impl<T> ARMv4<T>
 
     pub fn get_gpr(&self, n: usize) -> Word {
         self.gpr[n]
+    }
+
+    pub fn set_gpr(&mut self, n: usize, data: u32) {
+        self.gpr[n] = data;
     }
 }
 
@@ -262,6 +295,10 @@ mod test {
     }
 
     impl Bus for MockBus {
+        fn read_byte(&self, addr: Word) -> Byte {
+            self.mem[addr as usize]
+        }
+
         fn read_word(&self, addr: Word) -> Word {
             LittleEndian::read_u32(&self.mem[(addr as usize)..])
         }
@@ -301,6 +338,19 @@ mod test {
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
         arm.run_immediately();
         assert_eq!(arm.get_gpr(PC), 0x8000_0000);
+    }
+
+    #[test]
+    // ldrb r1, [r0]
+    fn ldrb_r1_r0() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE5D0_1000);
+        &bus.set(0x100, 0xAAAA_5555);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(0, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x55);
     }
 
     #[test]

@@ -14,7 +14,7 @@ mod memory;
 use constants::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use types::Word;
+use types::*;
 use memory::readable::*;
 use memory::writable::*;
 use memory::rom::Rom;
@@ -31,6 +31,12 @@ struct CpuBus {
 }
 
 impl core::Bus for CpuBus {
+    fn read_byte(&self, addr: u32) -> Byte {
+        match addr {
+            0x0000_0000...0x0007_FFFF => self.rom.borrow().read_byte(addr),
+            _ => panic!("TODO: "),
+        }
+    }    
     fn read_word(&self, addr: u32) -> Word {
         match addr {
             0x0000_0000...0x0007_FFFF => self.rom.borrow().read_word(addr),

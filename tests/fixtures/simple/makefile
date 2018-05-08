@@ -1,6 +1,7 @@
 curdir := $(CURDIR)
 
 build:
+	-docker stop arm-gcc
 	docker run --rm --name arm-gcc -d -it -v $(curdir):/work/host arm-gcc
 	docker exec arm-gcc echo "start build" && mkdir -p built
 	docker exec arm-gcc arm-none-eabi-as host/crt.S -o host/built/crt.o
