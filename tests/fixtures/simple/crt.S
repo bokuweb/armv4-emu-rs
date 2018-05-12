@@ -12,6 +12,7 @@ __reset:
 reset_entry:
   mov r0, #1234
 	ldrb r1, [r0]
+	ldr	r0, [r1], #4
 loop:
   mov r0, #2
   b loop

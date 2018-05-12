@@ -189,16 +189,27 @@ where
     #[allow(non_snake_case)]
     fn exec_ldr(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         let mut base = self.gpr[inst.get_Rn()];
+        // let index_mode = inst.get_memory_index_mode();
         // INFO: Treat as imm12 if not I.
-        if !inst.has_I() {
+        let offset = if !inst.has_I() {
             let src2 = inst.get_src2() as i32;
-            let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32;
-            base = (base as i32 + offset) as Word;
+            (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32
         } else {
+            0
             // TODO: implement later
+        };
+        debug!("offset = {:?}", offset);
+
+        if inst.is_pre_indexed() {
+            base = (base as i32 + offset) as Word;
         }
         let Rd = inst.get_Rd();
         self.gpr[Rd] = self.bus.borrow().read_word(base);
+        if !inst.is_pre_indexed() {
+            self.gpr[inst.get_Rn()] = (base as i32 + offset) as u32;
+        } else if inst.is_write_back() {
+            self.gpr[inst.get_Rn()] = base;
+        }
         if Rd == PC {
             Ok(PipelineStatus::Flush)
         } else {
@@ -341,6 +352,7 @@ mod test {
     }
 
     #[test]
+    // LDR offset addressing
     // ldrb r1, [r0]
     fn ldrb_r1_r0() {
         setup();
@@ -351,6 +363,22 @@ mod test {
         arm.set_gpr(0, 0x100);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(1), 0x55);
+        assert_eq!(arm.get_gpr(0), 0x0000_0100);
+    }
+
+    // LDR post index addressing
+    // ldr	r0, [r1], #4
+    #[test]
+    fn ldrb_r0_r1_4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE491_0004);
+        &bus.set(0x100, 0xAAAA_5555);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(0), 0xAAAA_5555);
+        assert_eq!(arm.get_gpr(1), 0x0104);
     }
 
     #[test]

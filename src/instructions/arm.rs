@@ -43,6 +43,14 @@ pub enum Condition {
     AL,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum IndexMode {
+    PostIndex,
+    Unsupported,
+    Offset,
+    PreIndex,
+}
+
 #[derive(Debug)]
 pub struct Instruction {
     pub cond: Condition,
@@ -140,9 +148,29 @@ impl Instruction {
         self.raw & 0x0200_0000 != 0
     }
 
+    pub fn is_pre_indexed(&self) -> bool {
+        (self.raw & (1 << 24)) != 0
+    }
+
+    pub fn is_write_back(&self) -> bool {
+        (self.raw & (1 << 21)) != 0
+    }
+
+    #[allow(non_snake_case)]
+    pub fn get_memory_index_mode(&self) -> IndexMode {
+        let P = (self.raw & (1 << 24)) != 0;
+        let W = (self.raw & (1 << 21)) != 0;
+        match (P, W) {
+            (false, false) => IndexMode::PostIndex,
+            (false, true) => IndexMode::Unsupported,
+            (true, false) => IndexMode::Offset,
+            (true, true) => IndexMode::PreIndex,
+        }
+    }
+
     // pub fn has_B(&self) -> bool {
     //     self.raw & 0x0040_0000 != 0
-    // }    
+    // }
 
     pub fn is_plus_offset(&self) -> bool {
         self.raw & 0x0080_0000 != 0
