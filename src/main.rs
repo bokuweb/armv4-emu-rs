@@ -7,6 +7,7 @@ extern crate byteorder;
 mod constants;
 mod core;
 mod instructions;
+mod decoder;
 mod registers;
 mod types;
 mod memory;

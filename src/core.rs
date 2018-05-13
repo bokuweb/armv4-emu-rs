@@ -4,7 +4,8 @@ use std::fmt;
 use std::rc::Rc;
 use std::result::Result::Err;
 
-use instructions::{arm, shift};
+use decoder::arm;
+use instructions::shift;
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
@@ -98,6 +99,62 @@ pub trait Bus {
     fn read_word(&self, addr: u32) -> Word;
 }
 
+fn exec_memory_processing<F>(
+    gpr: &mut [u32; 16],
+    inst: &arm::Instruction,
+    f: F,
+) -> Result<PipelineStatus, ArmError>
+where
+    F: Fn(&mut [u32; 16], u32),
+{
+    let mut base = gpr[inst.get_Rn()];
+    // INFO: Treat as imm12 if not I.
+    let offset = if !inst.has_I() {
+        inst.get_src2() as u32
+    } else {
+        let rm = inst.get_Rm() as usize;
+        let sh = inst.get_sh();
+        let shamt5 = inst.get_shamt5();
+        match sh {
+            arm::Shift::LSL => shift::lsl(gpr[rm], shamt5),
+            arm::Shift::LSR => shift::lsr(gpr[rm], shamt5),
+            arm::Shift::ASR => shift::asr(gpr[rm], shamt5),
+            arm::Shift::ROR => shift::ror(gpr[rm], shamt5),
+        }
+    };
+    let offset_base = if inst.is_plus_offset() {
+        (base + offset) as Word
+    } else {
+        (base - offset) as Word
+    };
+    if inst.is_pre_indexed() {
+        base = offset_base;
+    }
+    f(gpr, base);
+    if !inst.is_pre_indexed() {
+        gpr[inst.get_Rn()] = offset_base;
+    } else if inst.is_write_back() {
+        gpr[inst.get_Rn()] = base;
+    }
+    if inst.get_Rd() == PC {
+        Ok(PipelineStatus::Flush)
+    } else {
+        Ok(PipelineStatus::Continue)
+    }
+}
+
+/*
+fn ldr<T: Bus>(
+    gpr: &mut [u32; 16],
+    bus: &Rc<RefCell<T>>,
+    inst: arm::Instruction,
+) -> Result<PipelineStatus, ArmError> {
+    memory_process(gpr, inst, &|gpr, base, Rd| {
+        gpr[Rd] = bus.borrow().read_word(base);
+    })
+}
+*/
+
 impl<T> ARMv4<T>
 where
     T: Bus,
@@ -144,9 +201,9 @@ where
     fn execute(&mut self, inst: arm::Instruction) -> Result<(), ArmError> {
         debug!("decoded instruction = {:?}", inst);
         let pipeline_status = match inst.opcode {
-            arm::Opcode::LDR => self.exec_ldr(inst)?,
+            arm::Opcode::LDR => self.exec_ldr(&inst)?,
             arm::Opcode::STR => self.exec_str(inst)?,
-            arm::Opcode::LDRB => self.exec_ldrb(inst)?,
+            arm::Opcode::LDRB => self.exec_ldrb(&inst)?,
             arm::Opcode::STRB => unimplemented!(),
             arm::Opcode::MOV => self.exec_mov(inst)?,
             arm::Opcode::B => self.exec_b(inst)?,
@@ -166,63 +223,21 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn exec_ldrb(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        let mut base = self.gpr[inst.get_Rn()];
-        // INFO: Treat as imm12 if not I.
-        if !inst.has_I() {
-            let src2 = inst.get_src2() as i32;
-            let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32;
-            base = (base as i32 + offset) as Word;
-        } else {
-            debug!(" TODO: implement later");
-            unimplemented!();
-        }
-        let Rd = inst.get_Rd();
-        self.gpr[Rd] = self.bus.borrow().read_byte(base) as Word;
-        if Rd == PC {
-            Ok(PipelineStatus::Flush)
-        } else {
-            Ok(PipelineStatus::Continue)
-        }
+    fn exec_ldrb(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
+            let Rd = inst.get_Rd();
+            gpr[Rd] = bus.borrow().read_byte(base) as Word;
+        })
     }
 
     #[allow(non_snake_case)]
-    fn exec_ldr(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        let mut base = self.gpr[inst.get_Rn()];
-        // INFO: Treat as imm12 if not I.
-        let offset = if !inst.has_I() {
-            inst.get_src2() as u32
-        } else {
-            let rm = inst.get_Rm() as usize;
-            let sh = inst.get_sh();
-            let shamt5 = inst.get_shamt5();
-            match sh {
-                arm::Shift::LSL => shift::lsl(self.gpr[rm], shamt5),
-                arm::Shift::LSR => shift::lsr(self.gpr[rm], shamt5),
-                arm::Shift::ASR => shift::asr(self.gpr[rm], shamt5),
-                arm::Shift::ROR => shift::ror(self.gpr[rm], shamt5),
-            }
-        };
-        let offset_base = if inst.is_plus_offset() {
-            (base + offset) as Word
-        } else {
-            (base - offset) as Word
-        };
-        if inst.is_pre_indexed() {
-            base = offset_base;
-        }
-        let Rd = inst.get_Rd();
-        self.gpr[Rd] = self.bus.borrow().read_word(base);
-        if !inst.is_pre_indexed() {
-            self.gpr[inst.get_Rn()] = offset_base;
-        } else if inst.is_write_back() {
-            self.gpr[inst.get_Rn()] = base;
-        }
-        if Rd == PC {
-            Ok(PipelineStatus::Flush)
-        } else {
-            Ok(PipelineStatus::Continue)
-        }
+    fn exec_ldr(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
+            let Rd = inst.get_Rd();
+            gpr[Rd] = bus.borrow().read_word(base);
+        })
     }
 
     fn exec_str(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
