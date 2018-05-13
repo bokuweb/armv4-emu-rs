@@ -97,6 +97,8 @@ type HalfWord = u16;
 pub trait Bus {
     fn read_byte(&self, addr: u32) -> Byte;
     fn read_word(&self, addr: u32) -> Word;
+    fn write_byte(&mut self, addr: u32, data: u8);
+    fn write_word(&mut self, addr: u32, data: u32);
 }
 
 fn exec_memory_processing<F>(
@@ -130,6 +132,7 @@ where
     if inst.is_pre_indexed() {
         base = offset_base;
     }
+    println!("base = {} rd = {}", base, inst.get_Rd());
     f(gpr, base);
     if !inst.is_pre_indexed() {
         gpr[inst.get_Rn()] = offset_base;
@@ -202,9 +205,9 @@ where
         debug!("decoded instruction = {:?}", inst);
         let pipeline_status = match inst.opcode {
             arm::Opcode::LDR => self.exec_ldr(&inst)?,
-            arm::Opcode::STR => self.exec_str(inst)?,
+            arm::Opcode::STR => self.exec_str(&inst)?,
             arm::Opcode::LDRB => self.exec_ldrb(&inst)?,
-            arm::Opcode::STRB => unimplemented!(),
+            arm::Opcode::STRB => self.exec_strb(&inst)?,
             arm::Opcode::MOV => self.exec_mov(inst)?,
             arm::Opcode::B => self.exec_b(inst)?,
             arm::Opcode::BL => self.exec_bl(inst)?,
@@ -235,15 +238,24 @@ where
     fn exec_ldr(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
         let bus = &self.bus;
         exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
-            let Rd = inst.get_Rd();
-            gpr[Rd] = bus.borrow().read_word(base);
+            gpr[inst.get_Rd()] = bus.borrow().read_word(base);
         })
     }
 
-    fn exec_str(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        Ok(PipelineStatus::Continue)
+    fn exec_str(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
+            bus.borrow_mut().write_word(base, gpr[inst.get_Rd()]);
+        })
     }
 
+    fn exec_strb(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
+            bus.borrow_mut()
+                .write_byte(base, gpr[inst.get_Rd()] as Byte);
+        })
+    }
     fn exec_mov(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         if inst.has_I() {
             let src2 = inst.get_src2();
@@ -307,11 +319,13 @@ mod test {
 
     use super::*;
     use byteorder::{ByteOrder, LittleEndian};
+    use memory::readable::*;
     use std::cell::RefCell;
     use std::rc::Rc;
 
     trait CpuTest {
         fn run_immediately(&mut self);
+        fn get_mem(&self, addr: usize) -> u32;
     }
 
     struct MockBus {
@@ -336,6 +350,14 @@ mod test {
         fn read_word(&self, addr: Word) -> Word {
             LittleEndian::read_u32(&self.mem[(addr as usize)..])
         }
+
+        fn write_byte(&mut self, addr: Word, data: u8) {
+            self.mem[(addr as usize)] = data;
+        }
+
+        fn write_word(&mut self, addr: Word, data: u32) {
+            LittleEndian::write_u32(&mut self.mem[(addr as usize)..], data);
+        }
     }
 
     impl CpuTest for ARMv4<MockBus> {
@@ -343,6 +365,10 @@ mod test {
             for _ in 0..(INITIAL_PIPELINE_WAIT + 1) {
                 self.tick();
             }
+        }
+
+        fn get_mem(&self, addr: usize) -> u32 {
+            LittleEndian::read_u32(&self.bus.borrow().mem[(addr as usize)..])
         }
     }
 
@@ -389,9 +415,9 @@ mod test {
         assert_eq!(arm.get_gpr(0), 0x0000_0100);
     }
 
+    #[test]
     // LDR post index addressing
     // ldr	r0, [r1], #4
-    #[test]
     fn ldrb_r0_r1_4() {
         setup();
         let mut bus = MockBus::new();
@@ -417,6 +443,32 @@ mod test {
         arm.set_gpr(9, 0x100);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(8), 0xAA55_55AA);
+    }
+
+    #[test]
+    // 	str r4, [r3]
+    fn str_r4_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE583_4000);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0x200);
+        arm.set_gpr(4, 0xAA55_55AA);
+        arm.run_immediately();
+        assert_eq!(arm.get_mem(0x200), 0xAA55_55AA);
+    }
+
+    #[test]
+    // 	strb r4, [r3]
+    fn strb_r4_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE5C3_4000);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0x200);
+        arm.set_gpr(4, 0x1155_55AA);
+        arm.run_immediately();
+        assert_eq!(arm.get_mem(0x200), 0x0000_00AA);
     }
 
     #[test]
