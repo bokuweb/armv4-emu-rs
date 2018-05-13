@@ -60,7 +60,7 @@ pub enum Shift {
 }
 
 #[derive(Debug)]
-pub struct Instruction {
+pub struct Decoder {
     pub cond: Condition,
     pub opcode: Opcode,
     pub category: Category,
@@ -69,7 +69,7 @@ pub struct Instruction {
 
 pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
-impl Instruction {
+impl Decoder {
     pub fn opcode(&self) -> Opcode {
         self.opcode.clone()
     }
@@ -101,7 +101,7 @@ impl Instruction {
         }
     }
 
-    pub fn decode(fetched: Word) -> Instruction {
+    pub fn decode(fetched: Word) -> Decoder {
         let cond = fetched & COND_FIELD;
         let cond = match cond {
             COND_AL => Condition::AL,
@@ -119,14 +119,14 @@ impl Instruction {
 
         let opcode = match category {
             Category::Undefined => Opcode::Undefined,
-            Category::Memory => Instruction::decode_memory(fetched),
-            Category::DataProcessing => Instruction::decode_data_processing(fetched),
-            Category::Branch => Instruction::decode_branch(fetched),
+            Category::Memory => Decoder::decode_memory(fetched),
+            Category::DataProcessing => Decoder::decode_data_processing(fetched),
+            Category::Branch => Decoder::decode_branch(fetched),
             // v if (v & 0x0F00_0000) == 0x0F00_0000 => Opcode::SWI,
             _ => panic!("unsupported instruction"),
         };
 
-        Instruction {
+        Decoder {
             raw: fetched,
             cond,
             category,

@@ -103,20 +103,20 @@ pub trait Bus {
 
 fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
-    inst: &arm::Instruction,
+    dec: &arm::Decoder,
     f: F,
 ) -> Result<PipelineStatus, ArmError>
 where
     F: Fn(&mut [u32; 16], u32),
 {
-    let mut base = gpr[inst.get_Rn()];
+    let mut base = gpr[dec.get_Rn()];
     // INFO: Treat as imm12 if not I.
-    let offset = if !inst.has_I() {
-        inst.get_src2() as u32
+    let offset = if !dec.has_I() {
+        dec.get_src2() as u32
     } else {
-        let rm = inst.get_Rm() as usize;
-        let sh = inst.get_sh();
-        let shamt5 = inst.get_shamt5();
+        let rm = dec.get_Rm() as usize;
+        let sh = dec.get_sh();
+        let shamt5 = dec.get_shamt5();
         match sh {
             arm::Shift::LSL => shift::lsl(gpr[rm], shamt5),
             arm::Shift::LSR => shift::lsr(gpr[rm], shamt5),
@@ -124,22 +124,22 @@ where
             arm::Shift::ROR => shift::ror(gpr[rm], shamt5),
         }
     };
-    let offset_base = if inst.is_plus_offset() {
+    let offset_base = if dec.is_plus_offset() {
         (base + offset) as Word
     } else {
         (base - offset) as Word
     };
-    if inst.is_pre_indexed() {
+    if dec.is_pre_indexed() {
         base = offset_base;
     }
-    println!("base = {} rd = {}", base, inst.get_Rd());
+    println!("base = {} rd = {}", base, dec.get_Rd());
     f(gpr, base);
-    if !inst.is_pre_indexed() {
-        gpr[inst.get_Rn()] = offset_base;
-    } else if inst.is_write_back() {
-        gpr[inst.get_Rn()] = base;
+    if !dec.is_pre_indexed() {
+        gpr[dec.get_Rn()] = offset_base;
+    } else if dec.is_write_back() {
+        gpr[dec.get_Rn()] = base;
     }
-    if inst.get_Rd() == PC {
+    if dec.get_Rd() == PC {
         Ok(PipelineStatus::Flush)
     } else {
         Ok(PipelineStatus::Continue)
@@ -150,9 +150,9 @@ where
 fn ldr<T: Bus>(
     gpr: &mut [u32; 16],
     bus: &Rc<RefCell<T>>,
-    inst: arm::Instruction,
+    dec: arm::Decoder,
 ) -> Result<PipelineStatus, ArmError> {
-    memory_process(gpr, inst, &|gpr, base, Rd| {
+    memory_process(gpr, dec, &|gpr, base, Rd| {
         gpr[Rd] = bus.borrow().read_word(base);
     })
 }
@@ -201,20 +201,20 @@ where
         self.gpr[PC] = self.gpr[PC].wrapping_add(next);
     }
 
-    fn execute(&mut self, inst: arm::Instruction) -> Result<(), ArmError> {
-        debug!("decoded instruction = {:?}", inst);
-        let pipeline_status = match inst.opcode {
-            arm::Opcode::LDR => self.exec_ldr(&inst)?,
-            arm::Opcode::STR => self.exec_str(&inst)?,
-            arm::Opcode::LDRB => self.exec_ldrb(&inst)?,
-            arm::Opcode::STRB => self.exec_strb(&inst)?,
-            arm::Opcode::MOV => self.exec_mov(inst)?,
-            arm::Opcode::B => self.exec_b(inst)?,
-            arm::Opcode::BL => self.exec_bl(inst)?,
+    fn execute(&mut self, dec: arm::Decoder) -> Result<(), ArmError> {
+        debug!("decoded instruction = {:?}", dec);
+        let pipeline_status = match dec.opcode {
+            arm::Opcode::LDR => self.exec_ldr(&dec)?,
+            arm::Opcode::STR => self.exec_str(&dec)?,
+            arm::Opcode::LDRB => self.exec_ldrb(&dec)?,
+            arm::Opcode::STRB => self.exec_strb(&dec)?,
+            arm::Opcode::MOV => self.exec_mov(dec)?,
+            arm::Opcode::B => self.exec_b(dec)?,
+            arm::Opcode::BL => self.exec_bl(dec)?,
             //arm::Opcode::Undefined => unimplemented!(),
             //arm::Opcode::NOP => unimplemented!(),
             //// arm::Opcode::SWI => unimplemented!(),
-            // ArmOpcode::Unknown => self.execute_unknown(inst),
+            // ArmOpcode::Unknown => self.execute_unknown(dec),
             _ => unimplemented!(),
         };
 
@@ -226,53 +226,52 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn exec_ldrb(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_ldrb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
         let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
-            let Rd = inst.get_Rd();
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            let Rd = dec.get_Rd();
             gpr[Rd] = bus.borrow().read_byte(base) as Word;
         })
     }
 
     #[allow(non_snake_case)]
-    fn exec_ldr(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_ldr(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
         let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
-            gpr[inst.get_Rd()] = bus.borrow().read_word(base);
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            gpr[dec.get_Rd()] = bus.borrow().read_word(base);
         })
     }
 
-    fn exec_str(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_str(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
         let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
-            bus.borrow_mut().write_word(base, gpr[inst.get_Rd()]);
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
         })
     }
 
-    fn exec_strb(&mut self, inst: &arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_strb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
         let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &inst, |gpr, base| {
-            bus.borrow_mut()
-                .write_byte(base, gpr[inst.get_Rd()] as Byte);
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
         })
     }
-    fn exec_mov(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        if inst.has_I() {
-            let src2 = inst.get_src2();
-            self.gpr[inst.get_Rd()] = src2 as Word;
+    fn exec_mov(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        if dec.has_I() {
+            let src2 = dec.get_src2();
+            self.gpr[dec.get_Rd()] = src2 as Word;
         } else {
             // TODO: implement later
         }
         Ok(PipelineStatus::Continue)
     }
 
-    fn exec_bl(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_bl(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
         self.gpr[LR] = self.gpr[PC] - 4;
-        self.exec_b(inst)
+        self.exec_b(dec)
     }
 
-    fn exec_b(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        let imm = inst.get_imm24() as u32;
+    fn exec_b(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let imm = dec.get_imm24() as u32;
         let imm = (if imm & 0x0080_0000 != 0 {
             imm | 0xFF00_0000
         } else {
@@ -295,7 +294,7 @@ where
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
-                let decoded = arm::Instruction::decode(fetched);
+                let decoded = arm::Decoder::decode(fetched);
                 self.execute(decoded)
             }
             // TODO: Thumb mode
