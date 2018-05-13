@@ -192,21 +192,32 @@ where
         // let index_mode = inst.get_memory_index_mode();
         // INFO: Treat as imm12 if not I.
         let offset = if !inst.has_I() {
-            let src2 = inst.get_src2() as i32;
-            (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32
+            inst.get_src2() as u32
         } else {
-            0
-            // TODO: implement later
+            println!("aaaaaaaaaaaaa");
+            println!("Rm = {}", inst.get_Rm());
+            println!("sh = {}", inst.get_sh());
+            println!("shamt5 = {}", inst.get_shamt5());
+            let rm = inst.get_Rm();
+            let sh = inst.get_sh();
+            let shamt5 = inst.get_shamt5();
+            // TODOL show sh
+            (self.gpr[rm as usize] << shamt5) as u32
+        };
+        let offset_base = if inst.is_plus_offset() {
+            (base + offset) as Word
+        } else {
+            (base - offset) as Word
         };
         debug!("offset = {:?}", offset);
 
         if inst.is_pre_indexed() {
-            base = (base as i32 + offset) as Word;
+            base = offset_base; //(base as i32 + offset) as Word;
         }
         let Rd = inst.get_Rd();
         self.gpr[Rd] = self.bus.borrow().read_word(base);
         if !inst.is_pre_indexed() {
-            self.gpr[inst.get_Rn()] = (base as i32 + offset) as u32;
+            self.gpr[inst.get_Rn()] = offset_base;
         } else if inst.is_write_back() {
             self.gpr[inst.get_Rn()] = base;
         }
@@ -379,6 +390,21 @@ mod test {
         arm.run_immediately();
         assert_eq!(arm.get_gpr(0), 0xAAAA_5555);
         assert_eq!(arm.get_gpr(1), 0x0104);
+    }
+
+    #[test]
+    // ldr r8, [r9, r2, lsl #2]
+    // R8 <- mem[r9 + (r2 << 2)]
+    fn ldr_r8_r9_r2_lsl_2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE799_8102);
+        &bus.set(0x140, 0xAA55_55AA);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x10);
+        arm.set_gpr(9, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(8), 0xAA55_55AA);
     }
 
     #[test]
