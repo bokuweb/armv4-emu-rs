@@ -1,5 +1,5 @@
 build-fixture:
-	make -C tests/fixtures/simple build
+	make -C tests/fixtures/sandbox build
 
 dev-test:
 	RUST_LOG="armv4=debug" cargo test

@@ -51,6 +51,14 @@ pub enum IndexMode {
     PreIndex,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Shift {
+    LSL,
+    LSR,
+    ASR,
+    ROR,
+}
+
 #[derive(Debug)]
 pub struct Instruction {
     pub cond: Condition,
@@ -172,13 +180,19 @@ impl Instruction {
         self.raw & 0b1111
     }
 
-    pub fn get_sh(&self) -> u32 {
-        (self.raw & 0b11_0_0000) >> 4 
+    pub fn get_sh(&self) -> Shift {
+        match (self.raw & 0b11_0_0000) >> 5 {
+            0b00 => Shift::LSL,
+            0b01 => Shift::LSR,
+            0b10 => Shift::ASR,
+            0b11 => Shift::ROR,
+            _ => unreachable!(),
+        }
     }
 
     pub fn get_shamt5(&self) -> u32 {
         (self.raw & 0b11111_00_0_0000) >> 7
-    }    
+    }
     // pub fn has_B(&self) -> bool {
     //     self.raw & 0x0040_0000 != 0
     // }

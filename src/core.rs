@@ -4,7 +4,7 @@ use std::fmt;
 use std::rc::Rc;
 use std::result::Result::Err;
 
-use instructions::arm;
+use instructions::{arm, shift};
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
@@ -189,30 +189,27 @@ where
     #[allow(non_snake_case)]
     fn exec_ldr(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         let mut base = self.gpr[inst.get_Rn()];
-        // let index_mode = inst.get_memory_index_mode();
         // INFO: Treat as imm12 if not I.
         let offset = if !inst.has_I() {
             inst.get_src2() as u32
         } else {
-            println!("aaaaaaaaaaaaa");
-            println!("Rm = {}", inst.get_Rm());
-            println!("sh = {}", inst.get_sh());
-            println!("shamt5 = {}", inst.get_shamt5());
-            let rm = inst.get_Rm();
+            let rm = inst.get_Rm() as usize;
             let sh = inst.get_sh();
             let shamt5 = inst.get_shamt5();
-            // TODOL show sh
-            (self.gpr[rm as usize] << shamt5) as u32
+            match sh {
+                arm::Shift::LSL => shift::lsl(self.gpr[rm], shamt5),
+                arm::Shift::LSR => shift::lsr(self.gpr[rm], shamt5),
+                arm::Shift::ASR => shift::asr(self.gpr[rm], shamt5),
+                arm::Shift::ROR => shift::ror(self.gpr[rm], shamt5),
+            }
         };
         let offset_base = if inst.is_plus_offset() {
             (base + offset) as Word
         } else {
             (base - offset) as Word
         };
-        debug!("offset = {:?}", offset);
-
         if inst.is_pre_indexed() {
-            base = offset_base; //(base as i32 + offset) as Word;
+            base = offset_base;
         }
         let Rd = inst.get_Rd();
         self.gpr[Rd] = self.bus.borrow().read_word(base);
