@@ -4,7 +4,9 @@ use std::fmt;
 use std::rc::Rc;
 use std::result::Result::Err;
 
-use instructions::arm;
+use decoder::arm;
+use instructions::shift;
+use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
 pub const PC_OFFSET: usize = 2;
@@ -93,8 +95,68 @@ type Word = u32;
 type HalfWord = u16;
 
 pub trait Bus {
+    fn read_byte(&self, addr: u32) -> Byte;
     fn read_word(&self, addr: u32) -> Word;
+    fn write_byte(&mut self, addr: u32, data: u8);
+    fn write_word(&mut self, addr: u32, data: u32);
 }
+
+fn exec_memory_processing<F>(
+    gpr: &mut [u32; 16],
+    dec: &arm::Decoder,
+    f: F,
+) -> Result<PipelineStatus, ArmError>
+where
+    F: Fn(&mut [u32; 16], u32),
+{
+    let mut base = gpr[dec.get_Rn()];
+    // INFO: Treat as imm12 if not I.
+    let offset = if !dec.has_I() {
+        dec.get_src2() as u32
+    } else {
+        let rm = dec.get_Rm() as usize;
+        let sh = dec.get_sh();
+        let shamt5 = dec.get_shamt5();
+        match sh {
+            arm::Shift::LSL => shift::lsl(gpr[rm], shamt5),
+            arm::Shift::LSR => shift::lsr(gpr[rm], shamt5),
+            arm::Shift::ASR => shift::asr(gpr[rm], shamt5),
+            arm::Shift::ROR => shift::ror(gpr[rm], shamt5),
+        }
+    };
+    let offset_base = if dec.is_plus_offset() {
+        (base + offset) as Word
+    } else {
+        (base - offset) as Word
+    };
+    if dec.is_pre_indexed() {
+        base = offset_base;
+    }
+    println!("base = {} rd = {}", base, dec.get_Rd());
+    f(gpr, base);
+    if !dec.is_pre_indexed() {
+        gpr[dec.get_Rn()] = offset_base;
+    } else if dec.is_write_back() {
+        gpr[dec.get_Rn()] = base;
+    }
+    if dec.get_Rd() == PC {
+        Ok(PipelineStatus::Flush)
+    } else {
+        Ok(PipelineStatus::Continue)
+    }
+}
+
+/*
+fn ldr<T: Bus>(
+    gpr: &mut [u32; 16],
+    bus: &Rc<RefCell<T>>,
+    dec: arm::Decoder,
+) -> Result<PipelineStatus, ArmError> {
+    memory_process(gpr, dec, &|gpr, base, Rd| {
+        gpr[Rd] = bus.borrow().read_word(base);
+    })
+}
+*/
 
 impl<T> ARMv4<T>
 where
@@ -139,18 +201,20 @@ where
         self.gpr[PC] = self.gpr[PC].wrapping_add(next);
     }
 
-    fn execute(&mut self, inst: arm::Instruction) -> Result<(), ArmError> {
-        debug!("decoded instruction = {:?}", inst);
-        let pipeline_status = match inst.opcode {
-            arm::Opcode::LDR => self.exec_ldr(inst)?,
-            arm::Opcode::STR => self.exec_str(inst)?,
-            arm::Opcode::MOV => self.exec_mov(inst)?,
-            arm::Opcode::B => self.exec_b(inst)?,
-            arm::Opcode::BL => self.exec_bl(inst)?,
+    fn execute(&mut self, dec: arm::Decoder) -> Result<(), ArmError> {
+        debug!("decoded instruction = {:?}", dec);
+        let pipeline_status = match dec.opcode {
+            arm::Opcode::LDR => self.exec_ldr(&dec)?,
+            arm::Opcode::STR => self.exec_str(&dec)?,
+            arm::Opcode::LDRB => self.exec_ldrb(&dec)?,
+            arm::Opcode::STRB => self.exec_strb(&dec)?,
+            arm::Opcode::MOV => self.exec_mov(dec)?,
+            arm::Opcode::B => self.exec_b(dec)?,
+            arm::Opcode::BL => self.exec_bl(dec)?,
             //arm::Opcode::Undefined => unimplemented!(),
             //arm::Opcode::NOP => unimplemented!(),
             //// arm::Opcode::SWI => unimplemented!(),
-            // ArmOpcode::Unknown => self.execute_unknown(inst),
+            // ArmOpcode::Unknown => self.execute_unknown(dec),
             _ => unimplemented!(),
         };
 
@@ -162,46 +226,52 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn exec_ldr(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        let mut base = self.gpr[inst.get_Rn()];
-        // INFO: Treat as imm12 if not I.
-        if !inst.has_I() {
-            let src2 = inst.get_src2() as i32;
-            let offset = (src2 * if inst.is_plus_offset() { 1 } else { -1 }) as i32;
-            base = (base as i32 + offset) as Word;
+    fn exec_ldrb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            let Rd = dec.get_Rd();
+            gpr[Rd] = bus.borrow().read_byte(base) as Word;
+        })
+    }
+
+    #[allow(non_snake_case)]
+    fn exec_ldr(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            gpr[dec.get_Rd()] = bus.borrow().read_word(base);
+        })
+    }
+
+    fn exec_str(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
+        })
+    }
+
+    fn exec_strb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let bus = &self.bus;
+        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
+            bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
+        })
+    }
+    fn exec_mov(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        if dec.has_I() {
+            let src2 = dec.get_src2();
+            self.gpr[dec.get_Rd()] = src2 as Word;
         } else {
             // TODO: implement later
         }
-        let Rd = inst.get_Rd();
-        self.gpr[Rd] = self.bus.borrow().read_word(base);
-        if Rd == PC {
-            Ok(PipelineStatus::Flush)
-        } else {
-            Ok(PipelineStatus::Continue)
-        }
-    }
-
-    fn exec_str(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
         Ok(PipelineStatus::Continue)
     }
 
-    fn exec_mov(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        if inst.has_I() {
-            let src2 = inst.get_src2();
-            self.gpr[inst.get_Rd()] = src2 as Word;
-        } else {
-            // TODO: implement later
-        }
-        Ok(PipelineStatus::Continue)
-    }
-
-    fn exec_bl(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
+    fn exec_bl(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
         self.gpr[LR] = self.gpr[PC] - 4;
-        self.exec_b(inst)
+        self.exec_b(dec)
     }
 
-    fn exec_b(&mut self, inst: arm::Instruction) -> Result<PipelineStatus, ArmError> {
-        let imm = inst.get_imm24() as u32;
+    fn exec_b(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
+        let imm = dec.get_imm24() as u32;
         let imm = (if imm & 0x0080_0000 != 0 {
             imm | 0xFF00_0000
         } else {
@@ -224,7 +294,7 @@ where
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
-                let decoded = arm::Instruction::decode(fetched);
+                let decoded = arm::Decoder::decode(fetched);
                 self.execute(decoded)
             }
             // TODO: Thumb mode
@@ -235,6 +305,10 @@ where
     pub fn get_gpr(&self, n: usize) -> Word {
         self.gpr[n]
     }
+
+    pub fn set_gpr(&mut self, n: usize, data: u32) {
+        self.gpr[n] = data;
+    }
 }
 
 #[cfg(test)]
@@ -244,11 +318,13 @@ mod test {
 
     use super::*;
     use byteorder::{ByteOrder, LittleEndian};
+    use memory::readable::*;
     use std::cell::RefCell;
     use std::rc::Rc;
 
     trait CpuTest {
         fn run_immediately(&mut self);
+        fn get_mem(&self, addr: usize) -> u32;
     }
 
     struct MockBus {
@@ -266,8 +342,20 @@ mod test {
     }
 
     impl Bus for MockBus {
+        fn read_byte(&self, addr: Word) -> Byte {
+            self.mem[addr as usize]
+        }
+
         fn read_word(&self, addr: Word) -> Word {
             LittleEndian::read_u32(&self.mem[(addr as usize)..])
+        }
+
+        fn write_byte(&mut self, addr: Word, data: u8) {
+            self.mem[(addr as usize)] = data;
+        }
+
+        fn write_word(&mut self, addr: Word, data: u32) {
+            LittleEndian::write_u32(&mut self.mem[(addr as usize)..], data);
         }
     }
 
@@ -276,6 +364,10 @@ mod test {
             for _ in 0..(INITIAL_PIPELINE_WAIT + 1) {
                 self.tick();
             }
+        }
+
+        fn get_mem(&self, addr: usize) -> u32 {
+            LittleEndian::read_u32(&self.bus.borrow().mem[(addr as usize)..])
         }
     }
 
@@ -305,6 +397,77 @@ mod test {
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
         arm.run_immediately();
         assert_eq!(arm.get_gpr(PC), 0x8000_0000);
+    }
+
+    #[test]
+    // LDR offset addressing
+    // ldrb r1, [r0]
+    fn ldrb_r1_r0() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE5D0_1000);
+        &bus.set(0x100, 0xAAAA_5555);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(0, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x55);
+        assert_eq!(arm.get_gpr(0), 0x0000_0100);
+    }
+
+    #[test]
+    // LDR post index addressing
+    // ldr	r0, [r1], #4
+    fn ldrb_r0_r1_4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE491_0004);
+        &bus.set(0x100, 0xAAAA_5555);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(0), 0xAAAA_5555);
+        assert_eq!(arm.get_gpr(1), 0x0104);
+    }
+
+    #[test]
+    // ldr r8, [r9, r2, lsl #2]
+    // R8 <- mem[r9 + (r2 << 2)]
+    fn ldr_r8_r9_r2_lsl_2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE799_8102);
+        &bus.set(0x140, 0xAA55_55AA);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x10);
+        arm.set_gpr(9, 0x100);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(8), 0xAA55_55AA);
+    }
+
+    #[test]
+    // 	str r4, [r3]
+    fn str_r4_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE583_4000);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0x200);
+        arm.set_gpr(4, 0xAA55_55AA);
+        arm.run_immediately();
+        assert_eq!(arm.get_mem(0x200), 0xAA55_55AA);
+    }
+
+    #[test]
+    // 	strb r4, [r3]
+    fn strb_r4_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE5C3_4000);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0x200);
+        arm.set_gpr(4, 0x1155_55AA);
+        arm.run_immediately();
+        assert_eq!(arm.get_mem(0x200), 0x0000_00AA);
     }
 
     #[test]

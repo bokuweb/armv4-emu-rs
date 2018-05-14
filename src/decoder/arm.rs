@@ -12,7 +12,9 @@ pub enum Category {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Opcode {
     LDR,
+    LDRB,
     STR,
+    STRB,
     MOV,
     B,
     BL,
@@ -41,8 +43,24 @@ pub enum Condition {
     AL,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum IndexMode {
+    PostIndex,
+    Unsupported,
+    Offset,
+    PreIndex,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Shift {
+    LSL,
+    LSR,
+    ASR,
+    ROR,
+}
+
 #[derive(Debug)]
-pub struct Instruction {
+pub struct Decoder {
     pub cond: Condition,
     pub opcode: Opcode,
     pub category: Category,
@@ -51,20 +69,17 @@ pub struct Instruction {
 
 pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
-impl Instruction {
+impl Decoder {
     pub fn opcode(&self) -> Opcode {
         self.opcode.clone()
     }
 
-    pub fn is_load(&self) -> bool {
-        0 != (self.raw & (1 << 11))
-    }
-
     fn decode_memory(fetched: Word) -> Opcode {
         match fetched {
-            v if (v & 0x0000_0800) == 0x0000_0000 => Opcode::LDR,
-            v if (v & 0x0000_0800) == 0x0000_0800 => Opcode::STR,
-            _ => panic!("unsupported instruction"),
+            v if (v & 0x0050_0000) == 0x0050_0000 => Opcode::LDRB,
+            v if (v & 0x0010_0000) == 0x0010_0000 => Opcode::LDR,
+            v if (v & 0x0040_0000) == 0x0040_0000 => Opcode::STRB,
+            _ => Opcode::STR,
         }
     }
 
@@ -85,7 +100,7 @@ impl Instruction {
         }
     }
 
-    pub fn decode(fetched: Word) -> Instruction {
+    pub fn decode(fetched: Word) -> Decoder {
         let cond = fetched & COND_FIELD;
         let cond = match cond {
             COND_AL => Condition::AL,
@@ -103,14 +118,14 @@ impl Instruction {
 
         let opcode = match category {
             Category::Undefined => Opcode::Undefined,
-            Category::Memory => Instruction::decode_memory(fetched),
-            Category::DataProcessing => Instruction::decode_data_processing(fetched),
-            Category::Branch => Instruction::decode_branch(fetched),
+            Category::Memory => Decoder::decode_memory(fetched),
+            Category::DataProcessing => Decoder::decode_data_processing(fetched),
+            Category::Branch => Decoder::decode_branch(fetched),
             // v if (v & 0x0F00_0000) == 0x0F00_0000 => Opcode::SWI,
             _ => panic!("unsupported instruction"),
         };
 
-        Instruction {
+        Decoder {
             raw: fetched,
             cond,
             category,
@@ -139,6 +154,47 @@ impl Instruction {
     pub fn has_I(&self) -> bool {
         self.raw & 0x0200_0000 != 0
     }
+
+    pub fn is_pre_indexed(&self) -> bool {
+        (self.raw & (1 << 24)) != 0
+    }
+
+    pub fn is_write_back(&self) -> bool {
+        (self.raw & (1 << 21)) != 0
+    }
+
+    #[allow(non_snake_case)]
+    pub fn get_memory_index_mode(&self) -> IndexMode {
+        let P = (self.raw & (1 << 24)) != 0;
+        let W = (self.raw & (1 << 21)) != 0;
+        match (P, W) {
+            (false, false) => IndexMode::PostIndex,
+            (false, true) => IndexMode::Unsupported,
+            (true, false) => IndexMode::Offset,
+            (true, true) => IndexMode::PreIndex,
+        }
+    }
+
+    pub fn get_Rm(&self) -> u32 {
+        self.raw & 0b1111
+    }
+
+    pub fn get_sh(&self) -> Shift {
+        match (self.raw & 0b11_0_0000) >> 5 {
+            0b00 => Shift::LSL,
+            0b01 => Shift::LSR,
+            0b10 => Shift::ASR,
+            0b11 => Shift::ROR,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn get_shamt5(&self) -> u32 {
+        (self.raw & 0b11111_00_0_0000) >> 7
+    }
+    // pub fn has_B(&self) -> bool {
+    //     self.raw & 0x0040_0000 != 0
+    // }
 
     pub fn is_plus_offset(&self) -> bool {
         self.raw & 0x0080_0000 != 0
