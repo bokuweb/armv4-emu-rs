@@ -7,7 +7,7 @@ use types::*;
 
 use error::ArmError;
 use super::super::PipelineStatus;
-use super::shift;
+use super::shift::shift;
 
 pub fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
@@ -25,12 +25,7 @@ where
         let rm = dec.get_Rm() as usize;
         let sh = dec.get_sh();
         let shamt5 = dec.get_shamt5();
-        match sh {
-            arm::Shift::LSL => shift::lsl(gpr[rm], shamt5),
-            arm::Shift::LSR => shift::lsr(gpr[rm], shamt5),
-            arm::Shift::ASR => shift::asr(gpr[rm], shamt5),
-            arm::Shift::ROR => shift::ror(gpr[rm], shamt5),
-        }
+        shift(sh, gpr[rm], shamt5)
     };
     let offset_base = if dec.is_plus_offset() {
         (base + offset) as Word

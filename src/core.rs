@@ -7,11 +7,11 @@ use std::result::Result::Err;
 use bus::Bus;
 use constants::*;
 use decoder::arm;
+use error::ArmError;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
 use instructions::arm::memory::*;
 use instructions::PipelineStatus;
-use error::ArmError;
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
@@ -110,6 +110,7 @@ where
                 arm::Opcode::STR => exec_str(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::LDRB => exec_ldrb(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::STRB => exec_strb(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::AND => exec_and(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -325,6 +326,20 @@ mod test {
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
         arm.run_immediately();
         assert_eq!(arm.get_gpr(0), 0x0000_0001);
+    }
+
+    #[test]
+    // and r3, r1, r2
+    // r3 <- r1 & r2
+    fn and_r3_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE001_3002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0xAA55_55AA);
+        arm.set_gpr(2, 0xA050_1122);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(3), 0xA050_1122);
     }
 
     #[test]
