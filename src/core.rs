@@ -5,32 +5,12 @@ use std::rc::Rc;
 use std::result::Result::Err;
 
 use decoder::arm;
-use instructions::shift;
+use instructions::arm::memory::{exec_memory_processing};
+use instructions::{PipelineStatus, ArmError};
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
 pub const PC_OFFSET: usize = 2;
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum ArmError {
-    UnknownError,
-}
-
-impl error::Error for ArmError {
-    fn description(&self) -> &str {
-        match *self {
-            ArmError::UnknownError => "Unknown ARM error",
-        }
-    }
-}
-
-impl fmt::Display for ArmError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ArmError::UnknownError => write!(f, "Unknown ARM error"),
-        }
-    }
-}
 
 enum Arm {
     NOP,
@@ -46,12 +26,6 @@ enum CpuMode {
     System,
     Supervisor,
     FIQ,
-}
-
-#[derive(Debug)]
-enum PipelineStatus {
-    Flush,
-    Continue,
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,63 +74,6 @@ pub trait Bus {
     fn write_byte(&mut self, addr: u32, data: u8);
     fn write_word(&mut self, addr: u32, data: u32);
 }
-
-fn exec_memory_processing<F>(
-    gpr: &mut [u32; 16],
-    dec: &arm::Decoder,
-    f: F,
-) -> Result<PipelineStatus, ArmError>
-where
-    F: Fn(&mut [u32; 16], u32),
-{
-    let mut base = gpr[dec.get_Rn()];
-    // INFO: Treat as imm12 if not I.
-    let offset = if !dec.has_I() {
-        dec.get_src2() as u32
-    } else {
-        let rm = dec.get_Rm() as usize;
-        let sh = dec.get_sh();
-        let shamt5 = dec.get_shamt5();
-        match sh {
-            arm::Shift::LSL => shift::lsl(gpr[rm], shamt5),
-            arm::Shift::LSR => shift::lsr(gpr[rm], shamt5),
-            arm::Shift::ASR => shift::asr(gpr[rm], shamt5),
-            arm::Shift::ROR => shift::ror(gpr[rm], shamt5),
-        }
-    };
-    let offset_base = if dec.is_plus_offset() {
-        (base + offset) as Word
-    } else {
-        (base - offset) as Word
-    };
-    if dec.is_pre_indexed() {
-        base = offset_base;
-    }
-    println!("base = {} rd = {}", base, dec.get_Rd());
-    f(gpr, base);
-    if !dec.is_pre_indexed() {
-        gpr[dec.get_Rn()] = offset_base;
-    } else if dec.is_write_back() {
-        gpr[dec.get_Rn()] = base;
-    }
-    if dec.get_Rd() == PC {
-        Ok(PipelineStatus::Flush)
-    } else {
-        Ok(PipelineStatus::Continue)
-    }
-}
-
-/*
-fn ldr<T: Bus>(
-    gpr: &mut [u32; 16],
-    bus: &Rc<RefCell<T>>,
-    dec: arm::Decoder,
-) -> Result<PipelineStatus, ArmError> {
-    memory_process(gpr, dec, &|gpr, base, Rd| {
-        gpr[Rd] = bus.borrow().read_word(base);
-    })
-}
-*/
 
 impl<T> ARMv4<T>
 where
