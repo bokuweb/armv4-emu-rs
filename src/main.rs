@@ -10,11 +10,13 @@ extern crate byteorder;
 
 mod constants;
 mod core;
+mod bus;
 mod decoder;
 mod instructions;
 mod memory;
 mod registers;
 mod types;
+mod error;
 
 use constants::*;
 use memory::ram::Ram;
@@ -24,6 +26,8 @@ use memory::writable::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use types::*;
+use bus::Bus;
+use error::*;
 
 use std::env;
 use std::fs::File;
@@ -35,7 +39,7 @@ struct CpuBus {
     ram: Rc<RefCell<Ram>>,
 }
 
-impl core::Bus for CpuBus {
+impl Bus for CpuBus {
     fn read_byte(&self, addr: u32) -> Byte {
         match addr {
             0x0000_0000...0x0007_FFFF => self.rom.borrow().read_byte(addr),

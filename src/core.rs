@@ -4,9 +4,14 @@ use std::fmt;
 use std::rc::Rc;
 use std::result::Result::Err;
 
+use bus::Bus;
+use constants::*;
 use decoder::arm;
-use instructions::arm::memory::{exec_memory_processing};
-use instructions::{PipelineStatus, ArmError};
+use instructions::arm::branch::*;
+use instructions::arm::data::*;
+use instructions::arm::memory::*;
+use instructions::PipelineStatus;
+use error::ArmError;
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
@@ -16,11 +21,6 @@ enum Arm {
     NOP,
     NOP_RAW,
 }
-
-//enum PipelineState {
-//    WAIT,
-//    Ready,
-//}
 
 enum CpuMode {
     System,
@@ -43,12 +43,6 @@ impl PSR {
     }
 }
 
-pub const SP: usize = 13;
-pub const LR: usize = 14;
-pub const PC: usize = 15;
-
-struct CpuBus;
-
 pub struct ARMv4<T>
 where
     T: Bus,
@@ -63,16 +57,6 @@ where
     irq_disable: bool,
     fiq_disable: bool,
     optimise_swi: bool,
-}
-
-type Word = u32;
-type HalfWord = u16;
-
-pub trait Bus {
-    fn read_byte(&self, addr: u32) -> Byte;
-    fn read_word(&self, addr: u32) -> Word;
-    fn write_byte(&mut self, addr: u32, data: u8);
-    fn write_word(&mut self, addr: u32, data: u32);
 }
 
 impl<T> ARMv4<T>
@@ -120,82 +104,27 @@ where
 
     fn execute(&mut self, dec: arm::Decoder) -> Result<(), ArmError> {
         debug!("decoded instruction = {:?}", dec);
-        let pipeline_status = match dec.opcode {
-            arm::Opcode::LDR => self.exec_ldr(&dec)?,
-            arm::Opcode::STR => self.exec_str(&dec)?,
-            arm::Opcode::LDRB => self.exec_ldrb(&dec)?,
-            arm::Opcode::STRB => self.exec_strb(&dec)?,
-            arm::Opcode::MOV => self.exec_mov(dec)?,
-            arm::Opcode::B => self.exec_b(dec)?,
-            arm::Opcode::BL => self.exec_bl(dec)?,
-            //arm::Opcode::Undefined => unimplemented!(),
-            //arm::Opcode::NOP => unimplemented!(),
-            //// arm::Opcode::SWI => unimplemented!(),
-            // ArmOpcode::Unknown => self.execute_unknown(dec),
-            _ => unimplemented!(),
+        let pipeline_status = {
+            match dec.opcode {
+                arm::Opcode::LDR => exec_ldr(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::STR => exec_str(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::LDRB => exec_ldrb(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::STRB => exec_strb(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
+                arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
+                //arm::Opcode::Undefined => unimplemented!(),
+                //arm::Opcode::NOP => unimplemented!(),
+                //// arm::Opcode::SWI => unimplemented!(),
+                // ArmOpcode::Unknown => self.execute_unknown(dec),
+                _ => unimplemented!(),
+            }
         };
-
         match pipeline_status {
             PipelineStatus::Continue => self.increment_pc(),
             PipelineStatus::Flush => self.flush_pipeline(),
         };
         Ok(())
-    }
-
-    #[allow(non_snake_case)]
-    fn exec_ldrb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
-            let Rd = dec.get_Rd();
-            gpr[Rd] = bus.borrow().read_byte(base) as Word;
-        })
-    }
-
-    #[allow(non_snake_case)]
-    fn exec_ldr(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
-            gpr[dec.get_Rd()] = bus.borrow().read_word(base);
-        })
-    }
-
-    fn exec_str(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
-            bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
-        })
-    }
-
-    fn exec_strb(&mut self, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
-            bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
-        })
-    }
-    fn exec_mov(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        if dec.has_I() {
-            let src2 = dec.get_src2();
-            self.gpr[dec.get_Rd()] = src2 as Word;
-        } else {
-            // TODO: implement later
-        }
-        Ok(PipelineStatus::Continue)
-    }
-
-    fn exec_bl(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        self.gpr[LR] = self.gpr[PC] - 4;
-        self.exec_b(dec)
-    }
-
-    fn exec_b(&mut self, dec: arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let imm = dec.get_imm24() as u32;
-        let imm = (if imm & 0x0080_0000 != 0 {
-            imm | 0xFF00_0000
-        } else {
-            imm
-        }) as i32;
-        self.gpr[PC] = (self.gpr[PC] as i32 + imm * 4) as Word;
-        Ok(PipelineStatus::Flush)
     }
 
     pub fn tick(&mut self) -> Result<(), ArmError> {

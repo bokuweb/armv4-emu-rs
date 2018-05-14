@@ -1,8 +1,13 @@
-use super::super::{ArmError, PipelineStatus};
-use super::shift;
+use std::cell::RefCell;
+use std::rc::Rc;
 
+use bus::Bus;
 use decoder::arm;
 use types::*;
+
+use error::ArmError;
+use super::super::PipelineStatus;
+use super::shift;
 
 pub fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
@@ -49,12 +54,56 @@ where
     }
 }
 
-/*
-    #[allow(non_snake_case)]
-    pub fn exec_ldr(bus: &self.bus, dec: &arm::Decoder) -> Result<PipelineStatus, ArmError> {
-        let bus = &self.bus;
-        exec_memory_processing(&mut self.gpr, &dec, |gpr, base| {
-            gpr[dec.get_Rd()] = bus.borrow().read_word(base);
-        })
-    }
-*/
+#[allow(non_snake_case)]
+pub fn exec_ldr<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = bus.borrow().read_word(base);
+    })
+}
+
+#[allow(non_snake_case)]
+pub fn exec_ldrb<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = bus.borrow().read_byte(base) as Word;
+    })
+}
+
+pub fn exec_str<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_memory_processing(gpr, &dec, |gpr, base| {
+        bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
+    })
+}
+
+pub fn exec_strb<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_memory_processing(gpr, &dec, |gpr, base| {
+        bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
+    })
+}
