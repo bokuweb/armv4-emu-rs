@@ -6,3 +6,6 @@ dev-test:
 
 test:
 	cargo test	
+
+build: 
+	cargo +nightly build --features clippy

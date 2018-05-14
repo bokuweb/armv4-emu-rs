@@ -8,3 +8,4 @@ env_logger = "0.5.9"
 log = "*"
 byteorder = "1.2.2"
 goblin = "0.0.15"
+clippy = { version = "*", optional = true }

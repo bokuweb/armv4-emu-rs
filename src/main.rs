@@ -1,3 +1,7 @@
+
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
+
 extern crate env_logger;
 extern crate goblin;
 #[macro_use]

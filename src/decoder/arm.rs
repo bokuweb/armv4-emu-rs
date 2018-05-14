@@ -79,8 +79,7 @@ impl Decoder {
             v if (v & 0x0050_0000) == 0x0050_0000 => Opcode::LDRB,
             v if (v & 0x0010_0000) == 0x0010_0000 => Opcode::LDR,
             v if (v & 0x0040_0000) == 0x0040_0000 => Opcode::STRB,
-            v if (v & 0x0000_0000) == 0x0000_0000 => Opcode::STR,
-            _ => panic!("unsupported instruction"),
+            _ => Opcode::STR,
         }
     }
 
