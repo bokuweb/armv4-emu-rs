@@ -16,6 +16,7 @@ pub enum Opcode {
     STR,
     STRB,
     AND,
+    EOR,
     MOV,
     B,
     BL,
@@ -80,6 +81,7 @@ impl Decoder {
         let cmd = (fetched & 0x01E0_0000) >> 21;
         match cmd {
             0b0000 => Opcode::AND,
+            0b0001 => Opcode::EOR,
             0b1101 => Opcode::MOV,
             _ => panic!("unsupported instruction"),
         }
