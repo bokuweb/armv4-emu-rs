@@ -26,6 +26,9 @@ pub fn asr(value: u32, shift: u32) -> u32 {
 }
 
 pub fn ror(value: u32, shift: u32) -> u32 {
+    if shift == 0 {
+        return value;
+    }
     (value >> shift) | (value << (32 - shift))
 }
 

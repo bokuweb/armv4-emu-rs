@@ -197,7 +197,7 @@ impl Decoder {
     }
 
     pub fn get_rot(&self) -> u32 {
-        self.raw & 0xF_00 >> 8
+        (self.raw & 0x0000_0F_00) >> 8
     }
 
     // pub fn has_B(&self) -> bool {

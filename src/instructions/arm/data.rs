@@ -9,30 +9,13 @@ use bus::Bus;
 use decoder::arm;
 use types::*;
 
-pub fn exec_mov<T>(
-    bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+fn exec_data_processing<F>(
     gpr: &mut [Word; 16],
+    dec: &arm::Decoder,
+    data_process: F,
 ) -> Result<PipelineStatus, ArmError>
 where
-    T: Bus,
-{
-    if dec.has_I() {
-        let src2 = dec.get_src2();
-        gpr[dec.get_Rd()] = src2 as Word;
-    } else {
-        // TODO: implement later
-    }
-    Ok(PipelineStatus::Continue)
-}
-
-pub fn exec_and<T>(
-    bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
-    gpr: &mut [Word; 16],
-) -> Result<PipelineStatus, ArmError>
-where
-    T: Bus,
+    F: Fn(&mut [Word; 16], Word),
 {
     let value = if dec.has_I() {
         ror(dec.get_imm8(), dec.get_rot() * 2)
@@ -46,6 +29,32 @@ where
         };
         shift(sh, gpr[rm], shift_value)
     };
-    gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & value;
+    data_process(gpr, value);
     Ok(PipelineStatus::Continue)
+}
+
+pub fn exec_mov<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, |gpr, value| {
+        gpr[dec.get_Rd()] = value;
+    })
+}
+
+pub fn exec_and<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, |gpr, value| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & value;
+    })
 }

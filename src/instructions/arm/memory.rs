@@ -4,12 +4,13 @@ use std::rc::Rc;
 use bus::Bus;
 use decoder::arm;
 use types::*;
+use constants::*;
 
 use error::ArmError;
 use super::super::PipelineStatus;
 use super::shift::shift;
 
-pub fn exec_memory_processing<F>(
+fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
     dec: &arm::Decoder,
     load_or_store: F,
@@ -41,8 +42,7 @@ where
     } else if dec.is_write_back() {
         gpr[dec.get_Rn()] = base;
     }
-    // TODO: use constant
-    if dec.get_Rd() == 15 {
+    if dec.get_Rd() == PC {
         Ok(PipelineStatus::Flush)
     } else {
         Ok(PipelineStatus::Continue)
