@@ -17,6 +17,7 @@ pub enum Opcode {
     STRB,
     AND,
     EOR,
+    SUB,
     MOV,
     B,
     BL,
@@ -82,6 +83,7 @@ impl Decoder {
         match cmd {
             0b0000 => Opcode::AND,
             0b0001 => Opcode::EOR,
+            0b0010 => Opcode::SUB,
             0b1101 => Opcode::MOV,
             _ => panic!("unsupported instruction"),
         }
