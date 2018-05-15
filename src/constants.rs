@@ -36,3 +36,7 @@ pub const RN: u32 = 0x000F0000;
 // Dist
 pub const RD: u32 = 0x0000F000;
 
+
+pub const SP: usize = 13;
+pub const LR: usize = 14;
+pub const PC: usize = 15;

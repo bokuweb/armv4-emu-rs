@@ -1,5 +1,5 @@
 use constants::COND_FIELD;
-use types::Word;
+use types::{Shift, Word};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Category {
@@ -15,6 +15,7 @@ pub enum Opcode {
     LDRB,
     STR,
     STRB,
+    AND,
     MOV,
     B,
     BL,
@@ -51,14 +52,6 @@ pub enum IndexMode {
     PreIndex,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Shift {
-    LSL,
-    LSR,
-    ASR,
-    ROR,
-}
-
 #[derive(Debug)]
 pub struct Decoder {
     pub cond: Condition,
@@ -86,6 +79,7 @@ impl Decoder {
     fn decode_data_processing(fetched: Word) -> Opcode {
         let cmd = (fetched & 0x01E0_0000) >> 21;
         match cmd {
+            0b0000 => Opcode::AND,
             0b1101 => Opcode::MOV,
             _ => panic!("unsupported instruction"),
         }
@@ -189,15 +183,33 @@ impl Decoder {
         }
     }
 
+    #[allow(non_snake_case)]
+    pub fn get_Rs(&self) -> u32 {
+        (self.raw & 0b1111_0_00_0_0000) >> 8
+    }
+
     pub fn get_shamt5(&self) -> u32 {
         (self.raw & 0b11111_00_0_0000) >> 7
     }
+
+    pub fn get_imm8(&self) -> u32 {
+        self.raw & 0xFF
+    }
+
+    pub fn get_rot(&self) -> u32 {
+        (self.raw & 0x0000_0F_00) >> 8
+    }
+
     // pub fn has_B(&self) -> bool {
     //     self.raw & 0x0040_0000 != 0
     // }
 
     pub fn is_plus_offset(&self) -> bool {
         self.raw & 0x0080_0000 != 0
+    }
+
+    pub fn is_reg_offset(&self) -> bool {
+        self.raw & 0x0000_0010 != 0
     }
 
     pub fn is_minus_offset(&self) -> bool {

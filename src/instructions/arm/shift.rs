@@ -1,3 +1,14 @@
+use types::*;
+
+pub fn shift(shft_type: Shift, value: u32, shift: u32) -> u32 {
+    match shft_type {
+        Shift::LSL => lsl(value, shift),
+        Shift::LSR => lsr(value, shift),
+        Shift::ASR => asr(value, shift),
+        Shift::ROR => ror(value, shift),
+    }
+}
+
 pub fn lsl(value: u32, shift: u32) -> u32 {
     value << shift
 }
@@ -15,6 +26,9 @@ pub fn asr(value: u32, shift: u32) -> u32 {
 }
 
 pub fn ror(value: u32, shift: u32) -> u32 {
+    if shift == 0 {
+        return value;
+    }
     (value >> shift) | (value << (32 - shift))
 }
 
