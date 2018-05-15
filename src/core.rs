@@ -8,6 +8,7 @@ use bus::Bus;
 use constants::*;
 use decoder::arm;
 use error::ArmError;
+use registers::psr::PSR;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
 use instructions::arm::memory::*;
@@ -32,15 +33,6 @@ enum CpuMode {
 enum CpuState {
     ARM,
     Thumb,
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-struct PSR;
-
-impl PSR {
-    pub fn default() -> Self {
-        PSR
-    }
 }
 
 pub struct ARMv4<T>
