@@ -4,6 +4,9 @@ build-fixture:
 dev-test:
 	RUST_LOG="armv4=debug" cargo test
 
+test-watch:
+	cargo watch -x test	
+
 test:
 	cargo test	
 

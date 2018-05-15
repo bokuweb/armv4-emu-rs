@@ -84,3 +84,16 @@ where
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()].wrapping_sub(value);
     })
 }
+
+pub fn exec_rsb<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, |gpr, value| {
+        gpr[dec.get_Rd()] = value.wrapping_sub(gpr[dec.get_Rn()]);
+    })
+}
