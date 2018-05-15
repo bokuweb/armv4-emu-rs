@@ -19,6 +19,7 @@ pub enum Opcode {
     EOR,
     SUB,
     RSB,
+    ADD,
     MOV,
     B,
     BL,
@@ -86,6 +87,7 @@ impl Decoder {
             0b0001 => Opcode::EOR,
             0b0010 => Opcode::SUB,
             0b0011 => Opcode::RSB,
+            0b0100 => Opcode::ADD,
             0b1101 => Opcode::MOV,
             _ => panic!("unsupported instruction"),
         }
