@@ -107,6 +107,7 @@ where
                 arm::Opcode::SUB => exec_sub(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::RSB => exec_rsb(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::ADD => exec_add(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::ADC => exec_adc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -393,6 +394,21 @@ mod test {
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x3579_BE01);
     }   
+
+   #[test]
+    // adc r3, r1, r2
+    // r3 <- r1 + r2 + C
+    fn adc_r3_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0A1_3002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.cpsr.set_C(true);
+        arm.set_gpr(1, 0x1234_5678);
+        arm.set_gpr(2, 0x2345_6789);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(3), 0x3579_BE02);
+    }       
 
     #[test]
     // b pc-2

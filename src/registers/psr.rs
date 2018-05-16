@@ -67,17 +67,14 @@ impl PSR {
     const MODE_UNDEFINED: u32 = 0b1_1011;
     const MODE_SYSTEM: u32 = 0b1_1111;
 
-    /// Clears all reserved bits.
     pub fn clear_reserved_bits(&mut self) {
         self.0 &= PSR::NON_RESERVED_MASK;
     }
 
-    /// Converts the state bit to a state enum.
     pub fn state(&self) -> State {
         unsafe { mem::transmute(((self.0 >> PSR::STATE_BIT) & 1) as u8) }
     }
 
-    /// Converts the mode bit pattern to a mode enum.
     pub fn mode(&self) -> Mode {
         match self.0 & PSR::MODE_MASK {
             PSR::MODE_USER => Mode::User,
@@ -97,106 +94,82 @@ impl PSR {
         }
     }
 
-    /// Sets or clears the state bit
-    /// depending on the new state.
     pub fn set_state(&mut self, s: State) {
         self.0 &= !(1 << PSR::STATE_BIT);
         self.0 |= (s as u8 as u32) << PSR::STATE_BIT;
     }
 
-    /// Sets or clears the mode bits
-    /// depending on the new mode.
     pub fn set_mode(&mut self, m: Mode) {
         self.0 &= !PSR::MODE_MASK;
         self.0 |= m.as_bits();
     }
 
-    /// Sets the IRQ disable bit.
     pub fn disable_irq(&mut self) {
         self.0 |= 1 << PSR::IRQ_DISABLE_BIT;
     }
 
-    /// Sets the FIQ disable bit.
     pub fn disable_fiq(&mut self) {
         self.0 |= 1 << PSR::FIQ_DISABLE_BIT;
     }
 
-    /// Clears the IRQ disable bit.
     pub fn enable_irq(&mut self) {
         self.0 &= !(1 << PSR::IRQ_DISABLE_BIT);
     }
 
-    /// Clears the FIQ disable bit.
     pub fn enable_fiq(&mut self) {
         self.0 &= !(1 << PSR::FIQ_DISABLE_BIT);
     }
 
-    /// Gets the current state of the IRQ disable bit.
     pub fn irq_disabled(&self) -> bool {
-        0 != (self.0 & (1 << PSR::IRQ_DISABLE_BIT))
+        (self.0 & (1 << PSR::IRQ_DISABLE_BIT)) != 0
     }
 
-    /// Gets the current state of the FIQ disable bit.
     pub fn fiq_disabled(&self) -> bool {
-        0 != (self.0 & (1 << PSR::FIQ_DISABLE_BIT))
+        (self.0 & (1 << PSR::FIQ_DISABLE_BIT)) != 0
     }
 
-    /// Gets the current state of the N bit.
     #[allow(non_snake_case)]
-    pub fn N(self) -> bool {
-        0 != (self.0 & (1 << PSR::N_FLAG_BIT))
+    pub fn get_N(self) -> bool {
+        (self.0 & (1 << PSR::N_FLAG_BIT)) != 0
     }
 
-    /// Gets the current state of the Z bit.
     #[allow(non_snake_case)]
-    pub fn Z(self) -> bool {
-        0 != (self.0 & (1 << PSR::Z_FLAG_BIT))
+    pub fn get_Z(self) -> bool {
+        (self.0 & (1 << PSR::Z_FLAG_BIT)) != 0
     }
 
-    /// Gets the current state of the C bit.
     #[allow(non_snake_case)]
-    pub fn C(self) -> bool {
-        0 != (self.0 & (1 << PSR::C_FLAG_BIT))
+    pub fn get_C(self) -> bool {
+        (self.0 & (1 << PSR::C_FLAG_BIT)) != 0
     }
 
-    /// Gets the current state of the V bit.
     #[allow(non_snake_case)]
-    pub fn V(self) -> bool {
-        0 != (self.0 & (1 << PSR::V_FLAG_BIT))
+    pub fn get_V(self) -> bool {
+        (self.0 & (1 << PSR::V_FLAG_BIT)) != 0
     }
 
-    /// Set the new state of the N bit.
     #[allow(non_snake_case)]
     pub fn set_N(&mut self, n: bool) {
         self.0 = (self.0 & !(1 << PSR::N_FLAG_BIT)) | ((n as u32) << PSR::N_FLAG_BIT);
     }
 
-    /// Set the new state of the Z bit.
     #[allow(non_snake_case)]
     pub fn set_Z(&mut self, n: bool) {
         self.0 = (self.0 & !(1 << PSR::Z_FLAG_BIT)) | ((n as u32) << PSR::Z_FLAG_BIT);
     }
 
-    /// Set the new state of the C bit.
     #[allow(non_snake_case)]
     pub fn set_C(&mut self, n: bool) {
         self.0 = (self.0 & !(1 << PSR::C_FLAG_BIT)) | ((n as u32) << PSR::C_FLAG_BIT);
     }
 
-    /// Set the new state of the V bit.
     #[allow(non_snake_case)]
     pub fn set_V(&mut self, n: bool) {
         self.0 = (self.0 & !(1 << PSR::V_FLAG_BIT)) | ((n as u32) << PSR::V_FLAG_BIT);
     }
 
-    /// Overrides the PSR without modifying reserved bits.
-    pub fn override_non_reserved(&mut self, x: u32) {
-        self.0 = (x & PSR::NON_RESERVED_MASK) | (self.0 & !PSR::NON_RESERVED_MASK)
-    }
-
-    /// Overrides the flag bits of the PSR by masking the given value.
-    pub fn override_flags(&mut self, x: u32) {
-        self.0 = (x & PSR::FLAGS_MASK) | (self.0 & !PSR::FLAGS_MASK)
+    pub fn set(&mut self, d: u32) {
+        self.0 = d;
     }
 }
 
