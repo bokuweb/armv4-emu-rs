@@ -1,8 +1,5 @@
 use std::cell::RefCell;
-use std::error;
-use std::fmt;
 use std::rc::Rc;
-use std::result::Result::Err;
 
 use bus::Bus;
 use constants::*;
@@ -108,6 +105,8 @@ where
                 arm::Opcode::RSB => exec_rsb(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::ADD => exec_add(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::ADC => exec_adc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::SBC => exec_sbc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::RSC => exec_rsc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -408,7 +407,51 @@ mod test {
         arm.set_gpr(2, 0x2345_6789);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x3579_BE02);
-    }       
+    }    
+
+   #[test]
+    // sbc r3, r1, r2
+    // r3 <- r1 - r2 - !C
+    fn sbc_r3_r1_r2_with_set_c() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0E1_3002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.cpsr.set_C(true);
+        arm.set_gpr(1, 0x2345_6789);
+        arm.set_gpr(2, 0x1234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(3), 0x1111_1111);
+    }             
+
+   #[test]
+    // sbc r3, r1, r2
+    // r3 <- r1 - r2 - !C
+    fn sbc_r3_r1_r2_with_cleared_c() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0E1_3002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.cpsr.set_C(false);
+        arm.set_gpr(1, 0x2345_6789);
+        arm.set_gpr(2, 0x1234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(3), 0x1111_1110);
+    }  
+
+    #[test]
+    // rsb r3, r1, r2
+    // r3 <- r2 - r1 -!C
+    fn rsc_r3_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE061_3002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x1234_5678);
+        arm.set_gpr(2, 0x2345_6789);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(3), 0x1111_1111);
+    }        
 
     #[test]
     // b pc-2

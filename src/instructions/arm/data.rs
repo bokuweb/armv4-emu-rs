@@ -122,7 +122,40 @@ where
     T: Bus,
 {
     exec_data_processing(gpr, dec, |gpr, value| {
-        gpr[dec.get_Rd()] =
-            gpr[dec.get_Rn()].wrapping_add(value) + if cspr.get_C() { 1 } else { 0 };
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
+            .wrapping_add(value)
+            .wrapping_add(if cspr.get_C() { 1 } else { 0 });
+    })
+}
+
+pub fn exec_sbc<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+    cspr: &PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, |gpr, value| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
+            .wrapping_sub(value)
+            .wrapping_sub(if cspr.get_C() { 0 } else { 1 });
+    })
+}
+
+pub fn exec_rsc<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+    cspr: &PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, |gpr, value| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
+            .wrapping_sub(value)
+            .wrapping_sub(if cspr.get_C() { 0 } else { 1 });
     })
 }

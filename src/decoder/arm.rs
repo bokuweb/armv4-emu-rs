@@ -21,6 +21,8 @@ pub enum Opcode {
     RSB,
     ADD,
     ADC,
+    SBC,
+    RSC,
     MOV,
     B,
     BL,
@@ -83,6 +85,7 @@ impl Decoder {
 
     fn decode_data_processing(fetched: Word) -> Opcode {
         let cmd = (fetched & 0x01E0_0000) >> 21;
+        debug!("data processing cmd = {:x}", cmd);
         match cmd {
             0b0000 => Opcode::AND,
             0b0001 => Opcode::EOR,
@@ -90,6 +93,8 @@ impl Decoder {
             0b0011 => Opcode::RSB,
             0b0100 => Opcode::ADD,
             0b0101 => Opcode::ADC,
+            0b0110 => Opcode::SBC,
+            0b0111 => Opcode::RSC,
             0b1101 => Opcode::MOV,
             _ => panic!("unsupported instruction"),
         }
