@@ -13,10 +13,10 @@ use types::*;
 fn exec_data_processing<F>(
     gpr: &mut [Word; 16],
     dec: &arm::Decoder,
-    data_process: F,
+    data_process: &mut F,
 ) -> Result<PipelineStatus, ArmError>
 where
-    F: Fn(&mut [Word; 16], Word),
+    F: FnMut(&mut [Word; 16], Word),
 {
     let value = if dec.has_I() {
         ror(dec.get_imm8(), dec.get_rot() * 2)
@@ -42,7 +42,7 @@ pub fn exec_mov<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = value;
     })
 }
@@ -55,7 +55,7 @@ pub fn exec_and<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & value;
     })
 }
@@ -68,7 +68,7 @@ pub fn exec_eor<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()] ^ value;
     })
 }
@@ -81,7 +81,7 @@ pub fn exec_sub<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()].wrapping_sub(value);
     })
 }
@@ -94,7 +94,7 @@ pub fn exec_rsb<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = value.wrapping_sub(gpr[dec.get_Rn()]);
     })
 }
@@ -107,7 +107,7 @@ pub fn exec_add<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()].wrapping_add(value);
     })
 }
@@ -121,7 +121,7 @@ pub fn exec_adc<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
             .wrapping_add(value)
             .wrapping_add(if cspr.get_C() { 1 } else { 0 });
@@ -137,7 +137,7 @@ pub fn exec_sbc<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
             .wrapping_sub(value)
             .wrapping_sub(if cspr.get_C() { 0 } else { 1 });
@@ -153,9 +153,26 @@ pub fn exec_rsc<T>(
 where
     T: Bus,
 {
-    exec_data_processing(gpr, dec, |gpr, value| {
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()]
             .wrapping_sub(value)
             .wrapping_sub(if cspr.get_C() { 0 } else { 1 });
+    })
+}
+
+pub fn exec_tst<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+    cspr: &mut PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value| {
+        let tst = gpr[dec.get_Rn()] & value;
+        cspr.set_N(tst >> 31 != 0);
+        cspr.set_Z(tst == 0);
+        // TODO: carry
     })
 }
