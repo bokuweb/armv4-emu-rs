@@ -108,6 +108,7 @@ where
                 arm::Opcode::SBC => exec_sbc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::RSC => exec_rsc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::TST => exec_tst(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::TEQ => exec_teq(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -502,6 +503,37 @@ mod test {
         assert_eq!(arm.get_cpsr().get_N(), false);
         assert_eq!(arm.get_cpsr().get_Z(), true);
     }
+
+    #[test]
+    // teq r1, r2
+    fn tst_r1_r2_equal() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE131_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x8234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), true);
+    }
+
+    #[test]
+    // teq r1, r2
+    fn tst_r1_r2_not_equal() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE131_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x0234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+    }
+        
 
     #[test]
     // b pc-2

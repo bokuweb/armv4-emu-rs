@@ -184,3 +184,22 @@ where
         }
     })
 }
+
+pub fn exec_teq<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+    cspr: &mut PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, carry| {
+        let tst = gpr[dec.get_Rn()] ^ value;
+        cspr.set_N(tst >> 31 != 0);
+        cspr.set_Z(tst == 0);
+        if let Some(c) = carry {
+            cspr.set_C(c);
+        }
+    })
+}
