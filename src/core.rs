@@ -5,11 +5,11 @@ use bus::Bus;
 use constants::*;
 use decoder::arm;
 use error::ArmError;
-use registers::psr::PSR;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
 use instructions::arm::memory::*;
 use instructions::PipelineStatus;
+use registers::psr::PSR;
 use types::*;
 
 pub const INITIAL_PIPELINE_WAIT: u8 = 2;
@@ -148,6 +148,10 @@ where
 
     pub fn get_gpr(&self, n: usize) -> Word {
         self.gpr[n]
+    }
+
+    pub fn get_cpsr(&self) -> PSR {
+        self.cpsr
     }
 
     pub fn set_gpr(&mut self, n: usize, data: u32) {
@@ -351,7 +355,7 @@ mod test {
         arm.set_gpr(2, 0xA050_1122);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x0A05_4488);
-    }    
+    }
 
     #[test]
     // sub r3, r1, r2
@@ -365,7 +369,7 @@ mod test {
         arm.set_gpr(2, 0xA050_1122);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x0A05_4466);
-    }    
+    }
 
     #[test]
     // rsb r3, r1, r2
@@ -379,7 +383,7 @@ mod test {
         arm.set_gpr(2, 0x2345_6789);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x1111_1111);
-    }        
+    }
 
     #[test]
     // add r3, r1, r2
@@ -393,9 +397,9 @@ mod test {
         arm.set_gpr(2, 0x2345_6789);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x3579_BE01);
-    }   
+    }
 
-   #[test]
+    #[test]
     // adc r3, r1, r2
     // r3 <- r1 + r2 + C
     fn adc_r3_r1_r2() {
@@ -408,9 +412,9 @@ mod test {
         arm.set_gpr(2, 0x2345_6789);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x3579_BE02);
-    }    
+    }
 
-   #[test]
+    #[test]
     // sbc r3, r1, r2
     // r3 <- r1 - r2 - !C
     fn sbc_r3_r1_r2_with_set_c() {
@@ -423,9 +427,9 @@ mod test {
         arm.set_gpr(2, 0x1234_5678);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x1111_1111);
-    }             
+    }
 
-   #[test]
+    #[test]
     // sbc r3, r1, r2
     // r3 <- r1 - r2 - !C
     fn sbc_r3_r1_r2_with_cleared_c() {
@@ -438,7 +442,7 @@ mod test {
         arm.set_gpr(2, 0x1234_5678);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x1111_1110);
-    }  
+    }
 
     #[test]
     // rsc r3, r1, r2
@@ -452,9 +456,8 @@ mod test {
         arm.set_gpr(2, 0x2345_6789);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(3), 0x1111_1111);
-    }        
+    }
 
-/*
     #[test]
     // tst r0, r1
     fn tst_r0_r1() {
@@ -462,25 +465,43 @@ mod test {
         let mut bus = MockBus::new();
         &bus.set(0x0, 0xE110_0001);
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
-        arm.set_gpr(1, 0x1234_5678);
-        arm.set_gpr(2, 0x2345_6789);
+        arm.set_gpr(0, 0x8234_5678);
+        arm.set_gpr(1, 0x8345_6789);
         arm.run_immediately();
-        // assert_eq!(arm.get_gpr(3), 0x1111_1111);
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
     }   
-    */
 
     #[test]
     // tst r1, r2, asr #4
-    fn tst_r1_r2_asr_4() {
+    fn tst_r1_r2_asr_4_without_zero() {
         setup();
         let mut bus = MockBus::new();
         &bus.set(0x0, 0xE111_0242);
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
-        arm.set_gpr(1, 0x1234_5678);
-        arm.set_gpr(2, 0x2345_6789);
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x80FF_0008);
         arm.run_immediately();
-        // assert_eq!(arm.get_gpr(3), 0x1111_1111);
-    }   
+        assert_eq!(arm.get_cpsr().get_C(), true);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+    }
+
+    #[test]
+    // tst r1, r2, asr #4
+    fn tst_r1_r2_asr_4_with_zero() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE111_0242);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x0000_0000);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), true);
+    }
 
     #[test]
     // b pc-2
