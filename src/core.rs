@@ -454,13 +454,27 @@ mod test {
         assert_eq!(arm.get_gpr(3), 0x1111_1111);
     }        
 
-    // 010010E1
+/*
     #[test]
     // tst r0, r1
     fn tst_r0_r1() {
         setup();
         let mut bus = MockBus::new();
         &bus.set(0x0, 0xE110_0001);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x1234_5678);
+        arm.set_gpr(2, 0x2345_6789);
+        arm.run_immediately();
+        // assert_eq!(arm.get_gpr(3), 0x1111_1111);
+    }   
+    */
+
+    #[test]
+    // tst r1, r2, asr #4
+    fn tst_r1_r2_asr_4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE111_0242);
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
         arm.set_gpr(1, 0x1234_5678);
         arm.set_gpr(2, 0x2345_6789);
