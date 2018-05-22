@@ -16,6 +16,7 @@ reset_entry:
 	ldr r8, [r9, r2, lsl #2]
 	str r4, [r3]
 	and r3, r1, r2
+	tst r0, r1
 loop:
   mov r0, #2
   b loop

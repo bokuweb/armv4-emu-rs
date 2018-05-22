@@ -11,16 +11,44 @@ pub enum Category {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Opcode {
+    AND,
+    EOR,
+    SUB,
+    RSB,
+    ADD,
+    ADC,
+    SBC,
+    RSC,
+    TST,
+    TEQ,
+    CMP,
+    CMN,
+    ORR,
+    MOV,
+    LSL,
+    LSR,
+    ASR,
+    RRX,
+    ROR,
+    BIC,
+    MVN,
+    MUL,
+    MLA,
+    UMULL,
+    UMLAL,
+    SMULL,
+    SMLAL,
+    STR,
     LDR,
     LDRB,
-    STR,
     STRB,
-    AND,
-    MOV,
+    STRH,
+    LDRH,
+    LDRSB,
+    LDRSH,
     B,
     BL,
     Undefined,
-    // DataProcessing,
     // SWI,
     NOP,
 }
@@ -62,6 +90,22 @@ pub struct Decoder {
 
 pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
+fn get_I(raw: Word) -> Word {
+    (raw & 0x0200_0000) >> 25
+}
+
+fn get_sh(raw: Word) -> Word {
+    (raw & 0b11_0_0000) >> 5
+}
+
+fn get_instr(raw: Word) -> Word {
+    (raw & 0b1111_1111_0000) >> 4
+}
+
+fn get_S(raw: Word) -> Word {
+    (raw & 0x0010_0000) >> 20
+}
+
 impl Decoder {
     pub fn opcode(&self) -> Opcode {
         self.opcode.clone()
@@ -76,11 +120,36 @@ impl Decoder {
         }
     }
 
+    #[allow(non_snake_case)]
     fn decode_data_processing(fetched: Word) -> Opcode {
         let cmd = (fetched & 0x01E0_0000) >> 21;
+        let S = get_S(fetched) != 0;
+        let I = get_I(fetched) != 0;
+        let sh = get_sh(fetched);
+        let instr = get_instr(fetched);
+        debug!("data processing cmd = {:x}", cmd);
         match cmd {
             0b0000 => Opcode::AND,
-            0b1101 => Opcode::MOV,
+            0b0001 => Opcode::EOR,
+            0b0010 => Opcode::SUB,
+            0b0011 => Opcode::RSB,
+            0b0100 => Opcode::ADD,
+            0b0101 => Opcode::ADC,
+            0b0110 => Opcode::SBC,
+            0b0111 => Opcode::RSC,
+            0b1000 if S => Opcode::TST,
+            0b1001 if S => Opcode::TEQ,
+            0b1010 if S => Opcode::CMP,
+            0b1011 if S => Opcode::CMN,
+            0b1100 => Opcode::ORR,
+            0b1101 if I || instr == 0 => Opcode::MOV,
+            0b1101 if !I && sh == 0b00 => Opcode::LSL,
+            0b1101 if !I && sh == 0b01 => Opcode::LSR,
+            0b1101 if !I && sh == 0b10 => Opcode::ASR,
+            0b1101 if !I && sh == 0b11 && instr == 0 => Opcode::RRX,
+            0b1101 if !I && sh == 0b11 && instr != 0 => Opcode::ROR,
+            0b1110 => Opcode::BIC,
+            0b1111 => Opcode::MVN,
             _ => panic!("unsupported instruction"),
         }
     }
