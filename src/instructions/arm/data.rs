@@ -258,7 +258,7 @@ where
     })
 }
 
-pub fn exec_lsl<T>(
+pub fn exec_shift<T>(
     bus: &Rc<RefCell<T>>,
     dec: &arm::Decoder,
     gpr: &mut [Word; 16],
