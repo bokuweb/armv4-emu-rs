@@ -4,7 +4,7 @@ use std::rc::Rc;
 use super::super::PipelineStatus;
 use error::ArmError;
 
-use super::shift::{is_carry_over, ror, shift};
+use super::shift::{is_carry_over, lsl, ror, shift};
 use bus::Bus;
 use decoder::arm;
 use registers::psr::PSR;
@@ -255,5 +255,18 @@ where
 {
     exec_data_processing(gpr, dec, &mut |gpr, value, _| {
         gpr[dec.get_Rd()] = gpr[dec.get_Rn()] | value;
+    })
+}
+
+pub fn exec_lsl<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = value;
     })
 }
