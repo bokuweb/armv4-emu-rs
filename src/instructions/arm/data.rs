@@ -214,3 +214,23 @@ pub fn exec_cmp<T>(bus: &Rc<RefCell<T>>,
         cspr.set_C(rn >= value);
     })
 }
+
+pub fn exec_cmn<T>(bus: &Rc<RefCell<T>>,
+                   dec: &arm::Decoder,
+                   gpr: &mut [Word; 16],
+                   cspr: &mut PSR)
+                   -> Result<PipelineStatus, ArmError>
+    where T: Bus
+{
+    exec_data_processing(gpr,
+                         dec,
+                         &mut |gpr, value, _| {
+        let rn = gpr[dec.get_Rn()];
+        let cmn = (rn as u64).wrapping_add(value as u64);
+        cspr.set_N((cmn as i32) < 0);
+        cspr.set_Z(cmn == 0);
+        let (_, v) = (rn as i32).overflowing_add(value as i32);
+        cspr.set_V(v);
+        cspr.set_C(cmn & (1 << 32) != 0);
+    })
+}

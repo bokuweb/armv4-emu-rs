@@ -107,6 +107,7 @@ impl<T> ARMv4<T>
                 arm::Opcode::TST => exec_tst(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::TEQ => exec_teq(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::CMP => exec_cmp(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::CMN => exec_cmn(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -581,6 +582,21 @@ mod test {
         assert_eq!(arm.get_cpsr().get_V(), true);
     }
     
+    #[test]
+    // cmn r1, r2
+    fn cmn_r1_r2_with_overflow() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE171_0001);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x7FFF_FFFF);
+        arm.set_gpr(2, 0x0000_0001);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), true);
+    }    
 
     #[test]
     // b pc-2
