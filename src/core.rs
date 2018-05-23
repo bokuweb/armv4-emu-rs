@@ -33,7 +33,8 @@ enum CpuState {
 }
 
 pub struct ARMv4<T>
-    where T: Bus
+where
+    T: Bus,
 {
     pub gpr: [u32; 16],
     bus: Rc<RefCell<T>>,
@@ -48,10 +49,12 @@ pub struct ARMv4<T>
 }
 
 impl<T> ARMv4<T>
-    where T: Bus
+where
+    T: Bus,
 {
     pub fn new(bus: Rc<RefCell<T>>) -> ARMv4<T>
-        where T: Bus
+    where
+        T: Bus,
     {
         ARMv4 {
             bus: bus,
@@ -108,6 +111,7 @@ impl<T> ARMv4<T>
                 arm::Opcode::TEQ => exec_teq(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::CMP => exec_cmp(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
                 arm::Opcode::CMN => exec_cmn(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::ORR => exec_orr(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
@@ -549,7 +553,6 @@ mod test {
         assert_eq!(arm.get_cpsr().get_V(), false);
     }
 
-
     #[test]
     // cmp r1, r2
     fn cmp_r1_r2_without_carry() {
@@ -581,7 +584,7 @@ mod test {
         assert_eq!(arm.get_cpsr().get_Z(), false);
         assert_eq!(arm.get_cpsr().get_V(), true);
     }
-    
+
     #[test]
     // cmn r1, r2
     fn cmn_r1_r2_with_overflow() {
@@ -596,7 +599,20 @@ mod test {
         assert_eq!(arm.get_cpsr().get_N(), true);
         assert_eq!(arm.get_cpsr().get_Z(), false);
         assert_eq!(arm.get_cpsr().get_V(), true);
-    }    
+    }
+
+    #[test]
+    // orr r1, r2, r3
+    fn orr_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE182_1003);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0xAA55_55AA);
+        arm.set_gpr(3, 0x5500_AA00);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFF55_FFAA);
+    }
 
     #[test]
     // b pc-2
