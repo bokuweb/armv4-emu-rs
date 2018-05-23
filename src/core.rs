@@ -539,11 +539,11 @@ mod test {
         let mut bus = MockBus::new();
         &bus.set(0x0, 0xE151_0002);
         let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
-        arm.set_gpr(1, 0x8234_5678);
-        arm.set_gpr(2, 0x0234_5678);
+        arm.set_gpr(1, 0x0000_0002);
+        arm.set_gpr(2, 0x0000_0001);
         arm.run_immediately();
         assert_eq!(arm.get_cpsr().get_C(), true);
-        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_N(), false);
         assert_eq!(arm.get_cpsr().get_Z(), false);
         assert_eq!(arm.get_cpsr().get_V(), false);
     }
@@ -551,7 +551,7 @@ mod test {
 
     #[test]
     // cmp r1, r2
-    fn cmp_r1_r2_not_carry() {
+    fn cmp_r1_r2_without_carry() {
         setup();
         let mut bus = MockBus::new();
         &bus.set(0x0, 0xE151_0002);
@@ -562,8 +562,25 @@ mod test {
         assert_eq!(arm.get_cpsr().get_C(), false);
         assert_eq!(arm.get_cpsr().get_N(), true);
         assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), false);
+    }
+
+    #[test]
+    // cmp r1, r2
+    fn cmp_r1_r2_with_overflow() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE151_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8000_0000);
+        arm.set_gpr(2, 0x0000_0001);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), true);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
         assert_eq!(arm.get_cpsr().get_V(), true);
     }
+    
 
     #[test]
     // b pc-2

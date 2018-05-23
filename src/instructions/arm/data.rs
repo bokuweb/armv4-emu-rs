@@ -208,7 +208,7 @@ pub fn exec_cmp<T>(bus: &Rc<RefCell<T>>,
         let cmp = rn.wrapping_sub(value);
         cspr.set_N(cmp >> 31 != 0);
         cspr.set_Z(cmp == 0);
-        let (_, v) = rn.overflowing_sub(value);
+        let (_, v) = (rn as i32).overflowing_sub(value as i32);
         cspr.set_V(v);
         // NOTE: Should we consider to shifted carry?
         cspr.set_C(rn >= value);
