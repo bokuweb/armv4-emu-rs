@@ -118,6 +118,7 @@ where
                 arm::Opcode::ASR => exec_shift(&self.bus, &dec, &mut self.gpr)?,
                 // arm::Opcode::RRX => exec_shift(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::ROR => exec_shift(&self.bus, &dec, &mut self.gpr)?,
+                arm::Opcode::BIC => exec_bic(&self.bus, &dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
                 //arm::Opcode::Undefined => unimplemented!(),
@@ -665,6 +666,19 @@ mod test {
         arm.set_gpr(2, 0x00AA_AA55);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(1), 0xAA55_00AA);
+    }
+
+    #[test]
+    // bic r1, r2, r3
+    fn bic_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1C2_1003);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x00AA_AA55);
+        arm.set_gpr(3, 0x00AA_AAAA);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0000_0055);
     }
 
     #[test]

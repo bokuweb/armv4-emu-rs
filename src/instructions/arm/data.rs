@@ -267,7 +267,19 @@ where
     T: Bus,
 {
     exec_data_processing(gpr, dec, &mut |gpr, value, _| {
-        debug!("============================================== {:x} {:x}", gpr[dec.get_Rd()] , value);
         gpr[dec.get_Rd()] = value;
+    })
+}
+
+pub fn exec_bic<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & !value;
     })
 }
