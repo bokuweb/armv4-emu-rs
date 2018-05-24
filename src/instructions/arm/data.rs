@@ -280,6 +280,17 @@ where
     T: Bus,
 {
     exec_data_processing(gpr, dec, &mut |gpr, value, _| {
-        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & !value;
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & !value
     })
+}
+
+pub fn exec_mvn<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| gpr[dec.get_Rd()] = !value)
 }
