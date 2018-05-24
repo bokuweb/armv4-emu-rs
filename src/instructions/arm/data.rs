@@ -267,6 +267,7 @@ where
     T: Bus,
 {
     exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        debug!("============================================== {:x} {:x}", gpr[dec.get_Rd()] , value);
         gpr[dec.get_Rd()] = value;
     })
 }
