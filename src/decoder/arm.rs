@@ -146,7 +146,7 @@ impl Decoder {
             0b1101 if !I && sh == 0b00 => Opcode::LSL,
             0b1101 if !I && sh == 0b01 => Opcode::LSR,
             0b1101 if !I && sh == 0b10 => Opcode::ASR,
-            0b1101 if !I && sh == 0b11 && instr == 0 => Opcode::RRX,
+            0b1101 if !I && sh == 0b11 && (instr & 0xF90) == 0 => Opcode::RRX,
             0b1101 if !I && sh == 0b11 && instr != 0 => Opcode::ROR,
             0b1110 => Opcode::BIC,
             0b1111 => Opcode::MVN,

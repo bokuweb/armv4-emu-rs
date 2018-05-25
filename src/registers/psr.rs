@@ -159,8 +159,8 @@ impl PSR {
     }
 
     #[allow(non_snake_case)]
-    pub fn set_C(&mut self, n: bool) {
-        self.0 = (self.0 & !(1 << PSR::C_FLAG_BIT)) | ((n as u32) << PSR::C_FLAG_BIT);
+    pub fn set_C(&mut self, c: bool) {
+        self.0 = self.0 | ((c as u32) << PSR::C_FLAG_BIT);
     }
 
     #[allow(non_snake_case)]

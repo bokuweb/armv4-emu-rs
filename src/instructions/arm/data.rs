@@ -294,3 +294,17 @@ where
 {
     exec_data_processing(gpr, dec, &mut |gpr, value, _| gpr[dec.get_Rd()] = !value)
 }
+
+pub fn exec_rrx<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+    cspr: &PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = value >> 1 | (if cspr.get_C() { 0x8000_0000 } else { 0 })
+    })
+}
