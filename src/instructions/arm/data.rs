@@ -9,6 +9,7 @@ use bus::Bus;
 use decoder::arm;
 use registers::psr::PSR;
 use types::*;
+use constants::*;
 
 fn exec_data_processing<F>(
     gpr: &mut [Word; 16],
@@ -37,7 +38,11 @@ where
         )
     };
     data_process(gpr, value, carry);
-    Ok(PipelineStatus::Continue)
+    if dec.get_Rd() == PC {
+        Ok(PipelineStatus::Flush)
+    } else {
+        Ok(PipelineStatus::Continue)
+    }
 }
 
 pub fn exec_mov<T>(
