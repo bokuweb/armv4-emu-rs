@@ -8,6 +8,7 @@ use error::ArmError;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
 use instructions::arm::memory::*;
+use instructions::arm::multiple::*;
 use instructions::PipelineStatus;
 use registers::psr::PSR;
 use types::*;
@@ -91,37 +92,37 @@ where
         self.gpr[PC] = self.gpr[PC].wrapping_add(next);
     }
 
-    fn execute(&mut self, dec: arm::Decoder) -> Result<(), ArmError> {
-        debug!("decoded instruction = {:?}", dec);
+    fn execute(&mut self, dec: &arm::BaseDecoder) -> Result<(), ArmError> {
         let pipeline_status = {
-            match dec.opcode {
-                arm::Opcode::LDR => exec_ldr(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::STR => exec_str(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::LDRB => exec_ldrb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::STRB => exec_strb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::AND => exec_and(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::EOR => exec_eor(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::SUB => exec_sub(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::RSB => exec_rsb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::ADD => exec_add(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::ADC => exec_adc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::SBC => exec_sbc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::RSC => exec_rsc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::TST => exec_tst(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
-                arm::Opcode::TEQ => exec_teq(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
-                arm::Opcode::CMP => exec_cmp(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
-                arm::Opcode::CMN => exec_cmn(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
-                arm::Opcode::ORR => exec_orr(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::LSL => exec_shift(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::LSR => exec_shift(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::ASR => exec_shift(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::RRX => exec_rrx(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::ROR => exec_shift(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::BIC => exec_bic(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::MVN => exec_mvn(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
-                arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
+            match dec.opcode() {
+                arm::Opcode::LDR => exec_ldr(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::STR => exec_str(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LDRB => exec_ldrb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::STRB => exec_strb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::AND => exec_and(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::EOR => exec_eor(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::SUB => exec_sub(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::RSB => exec_rsb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ADD => exec_add(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ADC => exec_adc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::SBC => exec_sbc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::RSC => exec_rsc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::TST => exec_tst(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::TEQ => exec_teq(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::CMP => exec_cmp(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::CMN => exec_cmn(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::ORR => exec_orr(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MOV => exec_mov(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LSL => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LSR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ASR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::RRX => exec_rrx(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::ROR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::BIC => exec_bic(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MVN => exec_mvn(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MUL => exec_mul(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::B => exec_b(dec, &mut self.gpr)?,
+                arm::Opcode::BL => exec_bl(dec, &mut self.gpr)?,
                 //arm::Opcode::Undefined => unimplemented!(),
                 //arm::Opcode::NOP => unimplemented!(),
                 //// arm::Opcode::SWI => unimplemented!(),
@@ -149,8 +150,8 @@ where
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
-                let decoded = arm::Decoder::decode(fetched);
-                self.execute(decoded)
+                let decoder = &*arm::Decoder::decode(fetched);
+                self.execute(decoder)
             }
             // TODO: Thumb mode
             _ => unimplemented!(),
@@ -668,7 +669,7 @@ mod test {
         arm.cpsr.set_C(true);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(2), 0x8055_552A);
-    }    
+    }
 
     #[test]
     // ror r1, r2, #16
@@ -705,6 +706,19 @@ mod test {
         arm.set_gpr(2, 0x00AA_AA55);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(1), 0xFF55_55AA);
+    }
+
+    #[test]
+    // mul r1, r2, r3
+    fn mul_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE001_0392);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0xF000_0000);
+        arm.set_gpr(3, 2);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xE000_0000);
     }
 
     #[test]

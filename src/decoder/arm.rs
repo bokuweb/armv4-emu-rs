@@ -4,6 +4,7 @@ use types::{Shift, Word};
 #[derive(Debug, PartialEq, Clone)]
 pub enum Category {
     Undefined,
+    Multiple,
     Memory,
     DataProcessing,
     Branch,
@@ -88,6 +89,14 @@ pub struct Decoder {
     pub raw: Word,
 }
 
+#[derive(Debug)]
+pub struct MultipleDecoder {
+    pub cond: Condition,
+    pub opcode: Opcode,
+    pub category: Category,
+    pub raw: Word,
+}
+
 pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
 fn get_I(raw: Word) -> Word {
@@ -106,9 +115,154 @@ fn get_S(raw: Word) -> Word {
     (raw & 0x0010_0000) >> 20
 }
 
-impl Decoder {
-    pub fn opcode(&self) -> Opcode {
+pub trait Raw {
+    fn raw(&self) -> u32;
+    fn op(&self) -> Opcode;
+}
+
+pub trait BaseDecoder: Raw {
+    fn opcode(&self) -> Opcode {
+        self.op()
+    }
+
+    #[allow(non_snake_case)]
+    fn get_Rn(&self) -> usize {
+        (self.raw() as usize >> 16) & 0b1111
+    }
+
+    #[allow(non_snake_case)]
+    fn get_Rd(&self) -> usize {
+        (self.raw() as usize >> 12) & 0b1111
+    }
+
+    fn get_src2(&self) -> usize {
+        (self.raw() as usize) & 0x0fff
+    }
+
+    fn get_imm24(&self) -> i32 {
+        self.raw() as i32 & 0xff_ffff
+    }
+
+    fn has_I(&self) -> bool {
+        self.raw() & 0x0200_0000 != 0
+    }
+
+    fn is_pre_indexed(&self) -> bool {
+        (self.raw() & (1 << 24)) != 0
+    }
+
+    fn is_write_back(&self) -> bool {
+        (self.raw() & (1 << 21)) != 0
+    }
+
+    #[allow(non_snake_case)]
+    fn get_memory_index_mode(&self) -> IndexMode {
+        let P = (self.raw() & (1 << 24)) != 0;
+        let W = (self.raw() & (1 << 21)) != 0;
+        match (P, W) {
+            (false, false) => IndexMode::PostIndex,
+            (false, true) => IndexMode::Unsupported,
+            (true, false) => IndexMode::Offset,
+            (true, true) => IndexMode::PreIndex,
+        }
+    }
+
+    fn get_Rm(&self) -> usize {
+        self.raw() as usize & 0b1111
+    }
+
+    fn get_sh(&self) -> Shift {
+        match (self.raw() & 0b11_0_0000) >> 5 {
+            0b00 => Shift::LSL,
+            0b01 => Shift::LSR,
+            0b10 => Shift::ASR,
+            0b11 => Shift::ROR,
+            _ => unreachable!(),
+        }
+    }
+
+    #[allow(non_snake_case)]
+    fn get_Rs(&self) -> u32 {
+        (self.raw() & 0b1111_0_00_0_0000) >> 8
+    }
+
+    fn get_shamt5(&self) -> u32 {
+        (self.raw() & 0b11111_00_0_0000) >> 7
+    }
+
+    fn get_imm8(&self) -> u32 {
+        self.raw() & 0xFF
+    }
+
+    fn get_rot(&self) -> u32 {
+        (self.raw() & 0x0000_0F_00) >> 8
+    }
+
+    // pub fn has_B(&self) -> bool {
+    //     self.raw & 0x0040_0000 != 0
+    // }
+
+    fn is_plus_offset(&self) -> bool {
+        self.raw() & 0x0080_0000 != 0
+    }
+
+    fn is_reg_offset(&self) -> bool {
+        self.raw() & 0x0000_0010 != 0
+    }
+
+    fn is_minus_offset(&self) -> bool {
+        !self.is_plus_offset()
+    }
+
+    // fn is_branch_with_link(&self) -> bool {
+    //     self.raw & 0x0100_0000 != 0
+    // }
+}
+
+impl BaseDecoder for Decoder {}
+impl BaseDecoder for MultipleDecoder {
+    #[allow(non_snake_case)]
+    fn get_Rd(&self) -> usize {
+        (self.raw() as usize >> 16) & 0b1111
+    }
+
+    #[allow(non_snake_case)]
+    fn get_Rn(&self) -> usize {
+        self.raw() as usize & 0b1111
+    }
+
+    fn get_Rm(&self) -> usize {
+        (self.raw() >> 8) as usize & 0b1111
+    }
+}
+
+impl Raw for Decoder {
+    fn raw(&self) -> u32 {
+        self.raw
+    }
+
+    fn op(&self) -> Opcode {
         self.opcode.clone()
+    }
+}
+
+impl Raw for MultipleDecoder {
+    fn raw(&self) -> u32 {
+        self.raw
+    }
+
+    fn op(&self) -> Opcode {
+        self.opcode.clone()
+    }
+}
+
+impl Decoder {
+    fn decode_multiple(fetched: Word) -> Opcode {
+        let cmd = (fetched & 0x01E0_0000) >> 21;
+        match cmd {
+            0b0000 => Opcode::MUL,
+            _ => unimplemented!(),
+        }
     }
 
     fn decode_memory(fetched: Word) -> Opcode {
@@ -163,7 +317,7 @@ impl Decoder {
         }
     }
 
-    pub fn decode(fetched: Word) -> Decoder {
+    pub fn decode(fetched: Word) -> Box<BaseDecoder> {
         let cond = fetched & COND_FIELD;
         let cond = match cond {
             COND_AL => Condition::AL,
@@ -172,6 +326,8 @@ impl Decoder {
 
         let category = match fetched {
             v if (v & 0x0E00_0000) == 0x0A00_0000 => Category::Branch,
+            v if (v & 0x0FC0_00F0) == 0x0000_0090 => Category::Multiple,
+            v if (v & 0x0F80_00F0) == 0x0080_0090 => Category::Multiple,
             v if (v & 0x0E00_0010) == 0x0600_0010 => Category::Undefined,
             v if (v & 0x0C00_0000) == 0x0400_0000 => Category::Memory,
             v if (v & 0x0C00_0000) == 0x0000_0000 => Category::DataProcessing,
@@ -181,6 +337,7 @@ impl Decoder {
 
         let opcode = match category {
             Category::Undefined => Opcode::Undefined,
+            Category::Multiple => Decoder::decode_multiple(fetched),
             Category::Memory => Decoder::decode_memory(fetched),
             Category::DataProcessing => Decoder::decode_data_processing(fetched),
             Category::Branch => Decoder::decode_branch(fetched),
@@ -188,104 +345,19 @@ impl Decoder {
             _ => panic!("unsupported instruction"),
         };
 
-        Decoder {
-            raw: fetched,
-            cond,
-            category,
-            opcode,
+        match category {
+            Category::Multiple => Box::new(MultipleDecoder {
+                raw: fetched,
+                cond,
+                category,
+                opcode,
+            }),
+            _ => Box::new(Decoder {
+                raw: fetched,
+                cond,
+                category,
+                opcode,
+            }),
         }
     }
-
-    #[allow(non_snake_case)]
-    pub fn get_Rn(&self) -> usize {
-        (self.raw as usize >> 16) & 0b1111
-    }
-
-    #[allow(non_snake_case)]
-    pub fn get_Rd(&self) -> usize {
-        (self.raw as usize >> 12) & 0b1111
-    }
-
-    pub fn get_src2(&self) -> usize {
-        (self.raw as usize) & 0x0fff
-    }
-
-    pub fn get_imm24(&self) -> i32 {
-        self.raw as i32 & 0xff_ffff
-    }
-
-    pub fn has_I(&self) -> bool {
-        self.raw & 0x0200_0000 != 0
-    }
-
-    pub fn is_pre_indexed(&self) -> bool {
-        (self.raw & (1 << 24)) != 0
-    }
-
-    pub fn is_write_back(&self) -> bool {
-        (self.raw & (1 << 21)) != 0
-    }
-
-    #[allow(non_snake_case)]
-    pub fn get_memory_index_mode(&self) -> IndexMode {
-        let P = (self.raw & (1 << 24)) != 0;
-        let W = (self.raw & (1 << 21)) != 0;
-        match (P, W) {
-            (false, false) => IndexMode::PostIndex,
-            (false, true) => IndexMode::Unsupported,
-            (true, false) => IndexMode::Offset,
-            (true, true) => IndexMode::PreIndex,
-        }
-    }
-
-    pub fn get_Rm(&self) -> u32 {
-        self.raw & 0b1111
-    }
-
-    pub fn get_sh(&self) -> Shift {
-        match (self.raw & 0b11_0_0000) >> 5 {
-            0b00 => Shift::LSL,
-            0b01 => Shift::LSR,
-            0b10 => Shift::ASR,
-            0b11 => Shift::ROR,
-            _ => unreachable!(),
-        }
-    }
-
-    #[allow(non_snake_case)]
-    pub fn get_Rs(&self) -> u32 {
-        (self.raw & 0b1111_0_00_0_0000) >> 8
-    }
-
-    pub fn get_shamt5(&self) -> u32 {
-        (self.raw & 0b11111_00_0_0000) >> 7
-    }
-
-    pub fn get_imm8(&self) -> u32 {
-        self.raw & 0xFF
-    }
-
-    pub fn get_rot(&self) -> u32 {
-        (self.raw & 0x0000_0F_00) >> 8
-    }
-
-    // pub fn has_B(&self) -> bool {
-    //     self.raw & 0x0040_0000 != 0
-    // }
-
-    pub fn is_plus_offset(&self) -> bool {
-        self.raw & 0x0080_0000 != 0
-    }
-
-    pub fn is_reg_offset(&self) -> bool {
-        self.raw & 0x0000_0010 != 0
-    }
-
-    pub fn is_minus_offset(&self) -> bool {
-        !self.is_plus_offset()
-    }
-
-    // fn is_branch_with_link(&self) -> bool {
-    //     self.raw & 0x0100_0000 != 0
-    // }
 }
