@@ -276,6 +276,7 @@ impl Decoder {
         match cmd {
             0b0000 => Opcode::MUL,
             0b0001 => Opcode::MLA,
+            0b0100 => Opcode::UMULL,
             _ => unimplemented!(),
         }
     }
