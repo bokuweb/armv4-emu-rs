@@ -41,3 +41,18 @@ where
         gpr[dec.get_Rd()] = ((gpr[dec.get_Rn()] as u64) * gpr[dec.get_Rm()] as u64) as u32;
     })
 }
+
+pub fn exec_mla<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+    cspr: &PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_multiple(gpr, dec, &mut |gpr| {
+        gpr[dec.get_Rd()] = (((gpr[dec.get_Rn()] as u64) * gpr[dec.get_Rm()] as u64)
+            + gpr[dec.get_Ra()] as u64) as u32;
+    })
+}

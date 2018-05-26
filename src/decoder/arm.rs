@@ -135,6 +135,9 @@ pub trait BaseDecoder: Raw {
         (self.raw() as usize >> 12) & 0b1111
     }
 
+    #[allow(non_snake_case)]
+    fn get_Ra(&self) -> usize;
+
     fn get_src2(&self) -> usize {
         (self.raw() as usize) & 0x0fff
     }
@@ -219,8 +222,19 @@ pub trait BaseDecoder: Raw {
     // }
 }
 
-impl BaseDecoder for Decoder {}
+impl BaseDecoder for Decoder {
+    #[allow(non_snake_case)]
+    fn get_Ra(&self) -> usize {
+        panic!("Ra field is not supported in default decoder");
+    }
+}
+
 impl BaseDecoder for MultipleDecoder {
+    #[allow(non_snake_case)]
+    fn get_Ra(&self) -> usize {
+        (self.raw() as usize >> 12) & 0b1111
+    }
+    
     #[allow(non_snake_case)]
     fn get_Rd(&self) -> usize {
         (self.raw() as usize >> 16) & 0b1111
@@ -261,6 +275,7 @@ impl Decoder {
         let cmd = (fetched & 0x01E0_0000) >> 21;
         match cmd {
             0b0000 => Opcode::MUL,
+            0b0001 => Opcode::MLA,
             _ => unimplemented!(),
         }
     }
