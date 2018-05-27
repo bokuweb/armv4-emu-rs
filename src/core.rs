@@ -123,6 +123,7 @@ where
                 arm::Opcode::MUL => exec_mul(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::MLA => exec_mla(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::UMULL => exec_umull(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::UMLAL => exec_umlal(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
                 arm::Opcode::B => exec_b(dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(dec, &mut self.gpr)?,
                 //arm::Opcode::Undefined => unimplemented!(),
@@ -749,6 +750,22 @@ mod test {
         arm.run_immediately();
         assert_eq!(arm.get_gpr(1), 0x0070_0000);
         assert_eq!(arm.get_gpr(2), 0x0031_0000);
+    }
+
+    #[test]
+    // umlal r1, r2, r3, r4
+    fn umlal_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0A2_1493);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x0000_0001);
+        arm.set_gpr(2, 0x0000_0002);
+        arm.set_gpr(3, 0x7000_0001);
+        arm.set_gpr(4, 0x0070_0000);
+        arm.run_immediately();
+        // assert_eq!(arm.get_gpr(1), 0x0070_0001);
+        assert_eq!(arm.get_gpr(2), 0x0031_0002);
     }
 
     #[test]
