@@ -278,6 +278,8 @@ impl Decoder {
             0b0001 => Opcode::MLA,
             0b0100 => Opcode::UMULL,
             0b0101 => Opcode::UMLAL,
+            0b0110 => Opcode::SMULL,
+            0b0111 => Opcode::SMLAL,
             _ => unimplemented!(),
         }
     }
