@@ -8,6 +8,7 @@ use error::ArmError;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
 use instructions::arm::memory::*;
+use instructions::arm::multiple::*;
 use instructions::PipelineStatus;
 use registers::psr::PSR;
 use types::*;
@@ -91,26 +92,42 @@ where
         self.gpr[PC] = self.gpr[PC].wrapping_add(next);
     }
 
-    fn execute(&mut self, dec: arm::Decoder) -> Result<(), ArmError> {
-        debug!("decoded instruction = {:?}", dec);
+    fn execute(&mut self, dec: &arm::BaseDecoder) -> Result<(), ArmError> {
         let pipeline_status = {
-            match dec.opcode {
-                arm::Opcode::LDR => exec_ldr(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::STR => exec_str(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::LDRB => exec_ldrb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::STRB => exec_strb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::AND => exec_and(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::EOR => exec_eor(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::SUB => exec_sub(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::RSB => exec_rsb(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::ADD => exec_add(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::ADC => exec_adc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::SBC => exec_sbc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::RSC => exec_rsc(&self.bus, &dec, &mut self.gpr, &self.cpsr)?,
-                arm::Opcode::TST => exec_tst(&self.bus, &dec, &mut self.gpr, &mut self.cpsr)?,
-                arm::Opcode::MOV => exec_mov(&self.bus, &dec, &mut self.gpr)?,
-                arm::Opcode::B => exec_b(&dec, &mut self.gpr)?,
-                arm::Opcode::BL => exec_bl(&dec, &mut self.gpr)?,
+            match dec.opcode() {
+                arm::Opcode::LDR => exec_ldr(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::STR => exec_str(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LDRB => exec_ldrb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::STRB => exec_strb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::AND => exec_and(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::EOR => exec_eor(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::SUB => exec_sub(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::RSB => exec_rsb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ADD => exec_add(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ADC => exec_adc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::SBC => exec_sbc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::RSC => exec_rsc(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::TST => exec_tst(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::TEQ => exec_teq(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::CMP => exec_cmp(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::CMN => exec_cmn(&self.bus, dec, &mut self.gpr, &mut self.cpsr)?,
+                arm::Opcode::ORR => exec_orr(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MOV => exec_mov(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LSL => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LSR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::ASR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::RRX => exec_rrx(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::ROR => exec_shift(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::BIC => exec_bic(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MVN => exec_mvn(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::MUL => exec_mul(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::MLA => exec_mla(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::UMULL => exec_umull(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::UMLAL => exec_umlal(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::SMULL => exec_smull(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::SMLAL => exec_smlal(&self.bus, dec, &mut self.gpr, &self.cpsr)?,
+                arm::Opcode::B => exec_b(dec, &mut self.gpr)?,
+                arm::Opcode::BL => exec_bl(dec, &mut self.gpr)?,
                 //arm::Opcode::Undefined => unimplemented!(),
                 //arm::Opcode::NOP => unimplemented!(),
                 //// arm::Opcode::SWI => unimplemented!(),
@@ -138,8 +155,8 @@ where
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
-                let decoded = arm::Decoder::decode(fetched);
-                self.execute(decoded)
+                let decoder = &*arm::Decoder::decode(fetched);
+                self.execute(decoder)
             }
             // TODO: Thumb mode
             _ => unimplemented!(),
@@ -471,7 +488,7 @@ mod test {
         assert_eq!(arm.get_cpsr().get_C(), false);
         assert_eq!(arm.get_cpsr().get_N(), true);
         assert_eq!(arm.get_cpsr().get_Z(), false);
-    }   
+    }
 
     #[test]
     // tst r1, r2, asr #4
@@ -502,6 +519,287 @@ mod test {
         assert_eq!(arm.get_cpsr().get_N(), false);
         assert_eq!(arm.get_cpsr().get_Z(), true);
     }
+
+    #[test]
+    // teq r1, r2
+    fn tst_r1_r2_equal() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE131_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x8234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), true);
+    }
+
+    #[test]
+    // teq r1, r2
+    fn tst_r1_r2_not_equal() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE131_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8234_5678);
+        arm.set_gpr(2, 0x0234_5678);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+    }
+
+    #[test]
+    // cmp r1, r2
+    fn cmp_r1_r2_carry() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE151_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x0000_0002);
+        arm.set_gpr(2, 0x0000_0001);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), true);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), false);
+    }
+
+    #[test]
+    // cmp r1, r2
+    fn cmp_r1_r2_without_carry() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE151_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x0000_0001);
+        arm.set_gpr(2, 0x0000_0002);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), false);
+    }
+
+    #[test]
+    // cmp r1, r2
+    fn cmp_r1_r2_with_overflow() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE151_0002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x8000_0000);
+        arm.set_gpr(2, 0x0000_0001);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), true);
+        assert_eq!(arm.get_cpsr().get_N(), false);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), true);
+    }
+
+    #[test]
+    // cmn r1, r2
+    fn cmn_r1_r2_with_overflow() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE171_0001);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x7FFF_FFFF);
+        arm.set_gpr(2, 0x0000_0001);
+        arm.run_immediately();
+        assert_eq!(arm.get_cpsr().get_C(), false);
+        assert_eq!(arm.get_cpsr().get_N(), true);
+        assert_eq!(arm.get_cpsr().get_Z(), false);
+        assert_eq!(arm.get_cpsr().get_V(), true);
+    }
+
+    #[test]
+    // orr r1, r2, r3
+    fn orr_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE182_1003);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0xAA55_55AA);
+        arm.set_gpr(3, 0x5500_AA00);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFF55_FFAA);
+    }
+
+    #[test]
+    // lsl r1, r2, #16
+    fn lsl_r1_r2_16() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1A0_1802);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x0000_AA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xAA55_0000);
+    }
+
+    #[test]
+    // lsr r1, r2, #16
+    fn lsr_r1_r2_16() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1A0_1822);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x00AA_AA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0000_00AA);
+    }
+
+    #[test]
+    // asr r1, r2, #16
+    fn asr_r1_r2_16() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1A0_1842);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x80AA_AA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFFFF_80AA);
+    }
+
+    #[test]
+    // rrx r2, r1
+    fn rrx_r2_r1() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1A0_2061);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x00AA_AA55);
+        arm.cpsr.set_C(true);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(2), 0x8055_552A);
+    }
+
+    #[test]
+    // ror r1, r2, #16
+    fn ror_r1_r2_16() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1A0_1862);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x00AA_AA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xAA55_00AA);
+    }
+
+    #[test]
+    // bic r1, r2, r3
+    fn bic_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1C2_1003);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x00AA_AA55);
+        arm.set_gpr(3, 0x00AA_AAAA);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0000_0055);
+    }
+
+    #[test]
+    // mvn r1, r2
+    fn mvn_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1E0_1002);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x00AA_AA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFF55_55AA);
+    }
+
+    #[test]
+    // mul r1, r2, r3
+    fn mul_r1_r2_r3() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE001_0392);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0xF000_0000);
+        arm.set_gpr(3, 2);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xE000_0000);
+    }
+
+    #[test]
+    // mla r1, r2, r3, r4
+    fn mla_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE021_4392);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0xF000_0000);
+        arm.set_gpr(3, 2);
+        arm.set_gpr(4, 0xAA55);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xE000_AA55);
+    }
+
+    #[test]
+    // umull r1, r2, r3, r4
+    fn umull_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE082_1493);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0x7000_0001);
+        arm.set_gpr(4, 0x0070_0000);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0070_0000);
+        assert_eq!(arm.get_gpr(2), 0x0031_0000);
+    }
+
+    #[test]
+    // umlal r1, r2, r3, r4
+    fn umlal_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0A2_1493);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0x0000_0001);
+        arm.set_gpr(2, 0x0000_0002);
+        arm.set_gpr(3, 0x7000_0001);
+        arm.set_gpr(4, 0x0070_0000);
+        arm.run_immediately();
+        // assert_eq!(arm.get_gpr(1), 0x0070_0001);
+        assert_eq!(arm.get_gpr(2), 0x0031_0002);
+    }
+
+    #[test]
+    // smull r1, r2, r3, r4
+    fn smull_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0C2_1493);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(3, 0xFFFF_FFFE);
+        arm.set_gpr(4, 0x7FFF_FFFF);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0000_0002);
+        assert_eq!(arm.get_gpr(2), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    // smlal r1, r2, r3, r4
+    fn smlal_r1_r2_r3_r4() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE0E2_1493);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(1, 0xFFFF_FFFF);
+        arm.set_gpr(2, 0xFFFF_FFFF);        
+        arm.set_gpr(3, 0xFFFF_FFFE);
+        arm.set_gpr(4, 0x7FFF_FFFF);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0x0000_0001);
+        assert_eq!(arm.get_gpr(2), 0xFFFF_FFFF);
+    }
+   
 
     #[test]
     // b pc-2

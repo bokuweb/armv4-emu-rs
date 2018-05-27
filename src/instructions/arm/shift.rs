@@ -21,18 +21,27 @@ pub fn is_carry_over(shift_type: Shift, value: u32, shift: u32) -> Option<bool> 
 }
 
 pub fn lsl(value: u32, shift: u32) -> u32 {
-    value << shift
+    if shift == 0 {
+        return value;
+    }
+    value.wrapping_shl(shift)
 }
 
 pub fn lsr(value: u32, shift: u32) -> u32 {
-    value >> shift
+    if shift == 0 {
+        return value;
+    }
+    value.wrapping_shr(shift)
 }
 
 pub fn asr(value: u32, shift: u32) -> u32 {
+    if shift == 0 {
+        return value;
+    }
     if value & (1 << 31) == 0 {
-        value >> shift
+        value.wrapping_shr(shift)
     } else {
-        value >> shift | (0xFFFF_FFFF << (32 - shift))
+        value.wrapping_shr(shift) | ((0xFFFF_FFFF as u32).wrapping_shl(32 - shift))
     }
 }
 
@@ -40,7 +49,7 @@ pub fn ror(value: u32, shift: u32) -> u32 {
     if shift == 0 {
         return value;
     }
-    (value >> shift) | (value << (32 - shift))
+    value.wrapping_shr(shift) | (value.wrapping_shl(32 - shift))
 }
 
 #[test]

@@ -12,7 +12,7 @@ use super::shift::shift;
 
 fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     load_or_store: F,
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -52,7 +52,7 @@ where
 #[allow(non_snake_case)]
 pub fn exec_ldr<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -66,7 +66,7 @@ where
 #[allow(non_snake_case)]
 pub fn exec_ldrb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -79,26 +79,26 @@ where
 
 pub fn exec_str<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, &dec, |gpr, base| {
+    exec_memory_processing(gpr, dec, |gpr, base| {
         bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
     })
 }
 
 pub fn exec_strb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, &dec, |gpr, base| {
+    exec_memory_processing(gpr, dec, |gpr, base| {
         bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
     })
 }

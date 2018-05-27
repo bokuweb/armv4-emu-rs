@@ -4,15 +4,16 @@ use std::rc::Rc;
 use super::super::PipelineStatus;
 use error::ArmError;
 
-use super::shift::{is_carry_over, ror, shift};
+use super::shift::{is_carry_over, lsl, ror, shift};
 use bus::Bus;
 use decoder::arm;
 use registers::psr::PSR;
 use types::*;
+use constants::*;
 
-fn exec_data_processing<F>(
+pub fn exec_data_processing<F>(
     gpr: &mut [Word; 16],
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     data_process: &mut F,
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -37,12 +38,16 @@ where
         )
     };
     data_process(gpr, value, carry);
-    Ok(PipelineStatus::Continue)
+    if dec.get_Rd() == PC {
+        Ok(PipelineStatus::Flush)
+    } else {
+        Ok(PipelineStatus::Continue)
+    }
 }
 
 pub fn exec_mov<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -55,7 +60,7 @@ where
 
 pub fn exec_and<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -68,7 +73,7 @@ where
 
 pub fn exec_eor<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -81,7 +86,7 @@ where
 
 pub fn exec_sub<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -94,7 +99,7 @@ where
 
 pub fn exec_rsb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -107,7 +112,7 @@ where
 
 pub fn exec_add<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -120,7 +125,7 @@ where
 
 pub fn exec_adc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -136,7 +141,7 @@ where
 
 pub fn exec_sbc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -152,7 +157,7 @@ where
 
 pub fn exec_rsc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -168,7 +173,7 @@ where
 
 pub fn exec_tst<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &arm::BaseDecoder,
     gpr: &mut [Word; 16],
     cspr: &mut PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -182,5 +187,129 @@ where
         if let Some(c) = carry {
             cspr.set_C(c);
         }
+    })
+}
+
+pub fn exec_teq<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+    cspr: &mut PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, carry| {
+        let teq = gpr[dec.get_Rn()] ^ value;
+        cspr.set_N(teq >> 31 != 0);
+        cspr.set_Z(teq == 0);
+        if let Some(c) = carry {
+            cspr.set_C(c);
+        }
+    })
+}
+
+pub fn exec_cmp<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+    cspr: &mut PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        let rn = gpr[dec.get_Rn()];
+        let cmp = rn.wrapping_sub(value);
+        cspr.set_N(cmp >> 31 != 0);
+        cspr.set_Z(cmp == 0);
+        let (_, v) = (rn as i32).overflowing_sub(value as i32);
+        cspr.set_V(v);
+        // NOTE: Should we consider to shifted carry?
+        cspr.set_C(rn >= value);
+    })
+}
+
+pub fn exec_cmn<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+    cspr: &mut PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        let rn = gpr[dec.get_Rn()];
+        let cmn = (rn as u64).wrapping_add(value as u64);
+        cspr.set_N((cmn as i32) < 0);
+        cspr.set_Z(cmn == 0);
+        let (_, v) = (rn as i32).overflowing_add(value as i32);
+        cspr.set_V(v);
+        cspr.set_C(cmn & (1 << 32) != 0);
+    })
+}
+
+pub fn exec_orr<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] | value;
+    })
+}
+
+pub fn exec_shift<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = value;
+    })
+}
+
+pub fn exec_bic<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = gpr[dec.get_Rn()] & !value
+    })
+}
+
+pub fn exec_mvn<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| gpr[dec.get_Rd()] = !value)
+}
+
+pub fn exec_rrx<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::BaseDecoder,
+    gpr: &mut [Word; 16],
+    cspr: &PSR,
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_data_processing(gpr, dec, &mut |gpr, value, _| {
+        gpr[dec.get_Rd()] = value >> 1 | (if cspr.get_C() { 0x8000_0000 } else { 0 })
     })
 }
