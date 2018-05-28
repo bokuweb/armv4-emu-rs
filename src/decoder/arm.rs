@@ -253,6 +253,10 @@ impl Decoder for ExtraMemoryDecoder {
     fn has_I(&self) -> bool {
         self.raw() & 0x0010_0000 != 0
     }
+
+    fn get_imm8(&self) -> u32 {
+        (self.raw() & 0xF00) >> 4 & self.raw() & 0xF
+    }
 }
 
 impl Raw for BaseDecoder {
@@ -285,8 +289,8 @@ impl Raw for ExtraMemoryDecoder {
     }
 }
 
-fn decode_multiple(fetched: Word) -> Opcode {
-    let cmd = (fetched & 0x01E0_0000) >> 21;
+fn decode_multiple(raw: Word) -> Opcode {
+    let cmd = (raw & 0x01E0_0000) >> 21;
     match cmd {
         0b0000 => Opcode::MUL,
         0b0001 => Opcode::MLA,
@@ -298,8 +302,8 @@ fn decode_multiple(fetched: Word) -> Opcode {
     }
 }
 
-fn decode_memory(fetched: Word) -> Opcode {
-    match fetched {
+fn decode_memory(raw: Word) -> Opcode {
+    match raw {
         v if (v & 0x0050_0000) == 0x0050_0000 => Opcode::LDRB,
         v if (v & 0x0010_0000) == 0x0010_0000 => Opcode::LDR,
         v if (v & 0x0040_0000) == 0x0040_0000 => Opcode::STRB,
@@ -307,22 +311,25 @@ fn decode_memory(fetched: Word) -> Opcode {
     }
 }
 
-fn decode_extra_memory(fetched: Word) -> Opcode {
-    match fetched {
-        v if (v & 0x0050_0000) == 0x0050_0000 => Opcode::LDRB,
-        v if (v & 0x0010_0000) == 0x0010_0000 => Opcode::LDR,
-        v if (v & 0x0040_0000) == 0x0040_0000 => Opcode::STRB,
-        _ => Opcode::STR,
+fn decode_extra_memory(raw: Word) -> Opcode {
+    let op2 = (raw >> 5) & 0b11;
+    let l = raw & 0x0010_0000 != 0;
+    match op2 {
+        0b01 if !l => Opcode::STRH,
+        0b01 if l => Opcode::LDRH,
+        0b10 if l => Opcode::LDRSB,
+        0b11 if l => Opcode::LDRSH,
+        _ => panic!("undefined instruction detected"),
     }
 }
 
 #[allow(non_snake_case)]
-fn decode_data_processing(fetched: Word) -> Opcode {
-    let cmd = (fetched & 0x01E0_0000) >> 21;
-    let S = get_S(fetched) != 0;
-    let I = get_I(fetched) != 0;
-    let sh = get_sh(fetched);
-    let instr = get_instr(fetched);
+fn decode_data_processing(raw: Word) -> Opcode {
+    let cmd = (raw & 0x01E0_0000) >> 21;
+    let S = get_S(raw) != 0;
+    let I = get_I(raw) != 0;
+    let sh = get_sh(raw);
+    let instr = get_instr(raw);
     debug!("data processing cmd = {:x}", cmd);
     match cmd {
         0b0000 => Opcode::AND,
@@ -350,8 +357,8 @@ fn decode_data_processing(fetched: Word) -> Opcode {
     }
 }
 
-fn decode_branch(fetched: Word) -> Opcode {
-    let with_link = fetched & 0x0100_0000 != 0;
+fn decode_branch(raw: Word) -> Opcode {
+    let with_link = raw & 0x0100_0000 != 0;
     if with_link {
         Opcode::BL
     } else {
@@ -359,21 +366,21 @@ fn decode_branch(fetched: Word) -> Opcode {
     }
 }
 
-pub fn decode(fetched: Word) -> Box<Decoder> {
-    let cond = fetched & COND_FIELD;
+pub fn decode(raw: Word) -> Box<Decoder> {
+    let cond = raw & COND_FIELD;
     let cond = match cond {
         COND_AL => Condition::AL,
         _ => panic!("Unknowm condition {}", cond),
     };
 
-    let category = match fetched {
+    let category = match raw {
         v if (v & 0x0E00_0000) == 0x0A00_0000 => Category::Branch,
         v if (v & 0x0FC0_00F0) == 0x0000_0090 => Category::Multiple,
         v if (v & 0x0F80_00F0) == 0x0080_0090 => Category::Multiple,
         v if (v & 0x0E00_0010) == 0x0600_0010 => Category::Undefined,
-        v if (v & 0x0C00_0000) == 0x0400_0000 => Category::Memory,
         v if (v & 0x0E40_0F90) == 0x0000_0090 => Category::ExtraMemory,
         v if (v & 0x0E40_0090) == 0x0040_0090 => Category::ExtraMemory,
+        v if (v & 0x0C00_0000) == 0x0400_0000 => Category::Memory,
         v if (v & 0x0C00_0000) == 0x0000_0000 => Category::DataProcessing,
         // v if (v & 0x0F00_0000) == 0x0F00_0000 => Category::SWI,
         _ => panic!("Unsupported instruction"),
@@ -381,22 +388,16 @@ pub fn decode(fetched: Word) -> Box<Decoder> {
 
     let opcode = match category {
         Category::Undefined => Opcode::Undefined,
-        Category::Multiple => decode_multiple(fetched),
-        Category::Memory => decode_memory(fetched),
-        Category::ExtraMemory => decode_extra_memory(fetched),
-        Category::DataProcessing => decode_data_processing(fetched),
-        Category::Branch => decode_branch(fetched),
+        Category::Multiple => decode_multiple(raw),
+        Category::Memory => decode_memory(raw),
+        Category::ExtraMemory => decode_extra_memory(raw),
+        Category::DataProcessing => decode_data_processing(raw),
+        Category::Branch => decode_branch(raw),
         // v if (v & 0x0F00_0000) == 0x0F00_0000 => Opcode::SWI,
         _ => panic!("unsupported instruction"),
     };
 
-    let dec = BaseDecoder {
-        raw: fetched,
-        cond,
-        // category,
-        opcode,
-    };
-
+    let dec = BaseDecoder { raw, cond, opcode };
     match category {
         Category::Multiple => Box::new(MultipleDecoder(dec)),
         _ => Box::new(dec),
