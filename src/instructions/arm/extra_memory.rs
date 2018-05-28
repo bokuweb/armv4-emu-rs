@@ -54,7 +54,6 @@ where
     T: Bus,
 {
     exec_ex_memory_processing(gpr, dec, |gpr, base| {
-        debug!("-------------------- {:x} {:x}", gpr[dec.get_Rd()], base);
         bus.borrow_mut()
             .write_word(base, gpr[dec.get_Rd()] & 0xFFFF);
     })

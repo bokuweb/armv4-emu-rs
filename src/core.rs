@@ -7,8 +7,8 @@ use decoder::arm;
 use error::ArmError;
 use instructions::arm::branch::*;
 use instructions::arm::data::*;
-use instructions::arm::memory::*;
 use instructions::arm::extra_memory::*;
+use instructions::arm::memory::*;
 use instructions::arm::multiple::*;
 use instructions::PipelineStatus;
 use registers::psr::PSR;
@@ -813,6 +813,19 @@ mod test {
         arm.set_gpr(1, 0x1155_55AA);
         arm.run_immediately();
         assert_eq!(arm.get_mem(0x200), 0x0000_55AA);
+    }
+
+    #[test]
+    // strh r1, [r2, 0xff]
+    fn strh_r1_r2_0xff() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1C2_1FBF);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x200);
+        arm.set_gpr(1, 0x1155_55AA);
+        arm.run_immediately();
+        assert_eq!(arm.get_mem(0x2FF), 0x0000_55AA);
     }
 
     #[test]

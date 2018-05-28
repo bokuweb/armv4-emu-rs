@@ -251,11 +251,11 @@ impl Decoder for MultipleDecoder {
 impl Decoder for ExtraMemoryDecoder {
     #[allow(non_snake_case)]
     fn has_I(&self) -> bool {
-        self.raw() & 0x0010_0000 != 0
+        self.raw() & 0x0040_0000 != 0
     }
 
     fn get_imm8(&self) -> u32 {
-        (self.raw() & 0xF00) >> 4 & self.raw() & 0xF
+        (self.raw() & 0xF00).wrapping_shr(4) + (self.raw() & 0xF)
     }
 }
 
@@ -400,6 +400,7 @@ pub fn decode(raw: Word) -> Box<Decoder> {
     let dec = BaseDecoder { raw, cond, opcode };
     match category {
         Category::Multiple => Box::new(MultipleDecoder(dec)),
+        Category::ExtraMemory => Box::new(ExtraMemoryDecoder(dec)),
         _ => Box::new(dec),
     }
 }
