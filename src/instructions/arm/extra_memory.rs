@@ -7,7 +7,6 @@ use decoder::arm;
 use types::*;
 
 use super::super::PipelineStatus;
-use super::shift::shift;
 use error::ArmError;
 
 fn exec_ex_memory_processing<F>(
@@ -58,9 +57,9 @@ where
             .write_word(base, gpr[dec.get_Rd()] & 0xFFFF);
     })
 }
-/*
+
 #[allow(non_snake_case)]
-pub fn exec_ldr<T>(
+pub fn exec_ldrh<T>(
     bus: &Rc<RefCell<T>>,
     dec: &arm::Decoder,
     gpr: &mut [Word; 16],
@@ -69,7 +68,6 @@ where
     T: Bus,
 {
     exec_ex_memory_processing(gpr, dec, |gpr, base| {
-        gpr[dec.get_Rd()] = bus.borrow().read_word(base);
+        gpr[dec.get_Rd()] = bus.borrow().read_word(base) & 0xFFFF;
     })
 }
-*/
