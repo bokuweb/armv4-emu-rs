@@ -71,3 +71,32 @@ where
         gpr[dec.get_Rd()] = bus.borrow().read_word(base) & 0xFFFF;
     })
 }
+
+#[allow(non_snake_case)]
+pub fn exec_ldrsb<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = bus.borrow().read_byte(base) as i8 as i32 as u32;
+    })
+}
+
+#[allow(non_snake_case)]
+pub fn exec_ldrsh<T>(
+    bus: &Rc<RefCell<T>>,
+    dec: &arm::Decoder,
+    gpr: &mut [Word; 16],
+) -> Result<PipelineStatus, ArmError>
+where
+    T: Bus,
+{
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = (bus.borrow().read_word(base) & 0xFFFF) as i16 as i32 as u32;
+    })
+}
+

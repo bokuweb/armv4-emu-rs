@@ -129,6 +129,8 @@ where
                 arm::Opcode::STRB => exec_strb(&self.bus, dec, &mut self.gpr)?,
                 arm::Opcode::STRH => exec_strh(&self.bus, dec, &mut self.gpr)?,
                 arm::Opcode::LDRH => exec_ldrh(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LDRSB => exec_ldrsb(&self.bus, dec, &mut self.gpr)?,
+                arm::Opcode::LDRSH => exec_ldrsh(&self.bus, dec, &mut self.gpr)?,
                 arm::Opcode::B => exec_b(dec, &mut self.gpr)?,
                 arm::Opcode::BL => exec_bl(dec, &mut self.gpr)?,
                 //arm::Opcode::Undefined => unimplemented!(),
@@ -778,7 +780,7 @@ mod test {
     }
 
     #[test]
-    // 	str r4, [r3]
+    // str r4, [r3]
     fn str_r4_r3() {
         setup();
         let mut bus = MockBus::new();
@@ -791,7 +793,7 @@ mod test {
     }
 
     #[test]
-    // 	strb r4, [r3]
+    // strb r4, [r3]
     fn strb_r4_r3() {
         setup();
         let mut bus = MockBus::new();
@@ -840,6 +842,32 @@ mod test {
         arm.set_gpr(2, 0x200);
         arm.run_immediately();
         assert_eq!(arm.get_gpr(1), 0x0000_5A5A);
+    }
+
+    #[test]
+    // ldrsb r1, [r2]
+    fn ldrsb_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1D2_10D0);
+        &bus.set(0x200, 0xA5A5_5AFF);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x200);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    // ldrsh r1, [r2]
+    fn ldrsh_r1_r2() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0, 0xE1D2_10D0);
+        &bus.set(0x200, 0xA5A5_FFFE);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.set_gpr(2, 0x200);
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(1), 0xFFFF_FFFE);
     }
 
     #[test]
