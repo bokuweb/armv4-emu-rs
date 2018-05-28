@@ -92,7 +92,7 @@ where
         self.gpr[PC] = self.gpr[PC].wrapping_add(next);
     }
 
-    fn execute(&mut self, dec: &arm::BaseDecoder) -> Result<(), ArmError> {
+    fn execute(&mut self, dec: &arm::Decoder) -> Result<(), ArmError> {
         let pipeline_status = {
             match dec.opcode() {
                 arm::Opcode::LDR => exec_ldr(&self.bus, dec, &mut self.gpr)?,
@@ -155,7 +155,7 @@ where
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 debug!("fetched code = {:x}", fetched);
-                let decoder = &*arm::Decoder::decode(fetched);
+                let decoder = &*arm::decode(fetched);
                 self.execute(decoder)
             }
             // TODO: Thumb mode
