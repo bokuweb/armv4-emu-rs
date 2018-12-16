@@ -892,4 +892,17 @@ mod test {
         assert_eq!(arm.get_gpr(PC), 0x0000_0000);
         assert_eq!(arm.get_gpr(LR), 0x0000_0004);
     }
+
+    #[test]
+    // ldm r0!, {r4-r11}
+    // Load 8 words from the source
+    fn ldm_r0_r4_r11() {
+        setup();
+        let mut bus = MockBus::new();
+        &bus.set(0x0000_0000, 0xE8B0_0FF0);
+        let mut arm = ARMv4::new(Rc::new(RefCell::new(bus)));
+        arm.run_immediately();
+        assert_eq!(arm.get_gpr(PC), 0x0000_0000);
+        assert_eq!(arm.get_gpr(LR), 0x0000_0004);
+    }
 }

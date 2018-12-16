@@ -9,6 +9,7 @@ pub enum Category {
     ExtraMemory,
     DataProcessing,
     Branch,
+    MultiLoadAndStore,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -50,6 +51,8 @@ pub enum Opcode {
     LDRSH,
     B,
     BL,
+    LDM,
+    STM,
     Undefined,
     // SWI,
     NOP,
@@ -95,6 +98,10 @@ pub struct MultipleDecoder(BaseDecoder);
 pub struct ExtraMemoryDecoder(BaseDecoder);
 
 // pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
+
+fn is_load(raw: Word) -> bool {
+    raw & 0x0010_0000 != 0
+}
 
 #[allow(non_snake_case)]
 fn get_I(raw: Word) -> Word {
@@ -208,6 +215,7 @@ pub trait Decoder: Raw {
     //     self.raw & 0x0040_0000 != 0
     // }
 
+    // Bit: 23
     fn is_plus_offset(&self) -> bool {
         self.raw() & 0x0080_0000 != 0
     }
@@ -313,7 +321,7 @@ fn decode_memory(raw: Word) -> Opcode {
 
 fn decode_extra_memory(raw: Word) -> Opcode {
     let op2 = (raw >> 5) & 0b11;
-    let l = raw & 0x0010_0000 != 0;
+    let l = is_load(raw);
     match op2 {
         0b01 if !l => Opcode::STRH,
         0b01 if l => Opcode::LDRH,
@@ -323,7 +331,6 @@ fn decode_extra_memory(raw: Word) -> Opcode {
     }
 }
 
-#[allow(non_snake_case)]
 fn decode_data_processing(raw: Word) -> Opcode {
     let cmd = (raw & 0x01E0_0000) >> 21;
     let S = get_S(raw) != 0;
@@ -357,6 +364,14 @@ fn decode_data_processing(raw: Word) -> Opcode {
     }
 }
 
+fn decode_multi_load_and_store(raw: Word) -> Opcode {
+    if is_load(raw) {
+        Opcode::LDM
+    } else {
+        Opcode::STM
+    }
+}
+
 fn decode_branch(raw: Word) -> Opcode {
     let with_link = raw & 0x0100_0000 != 0;
     if with_link {
@@ -382,6 +397,7 @@ pub fn decode(raw: Word) -> Box<Decoder> {
         v if (v & 0x0E40_0090) == 0x0040_0090 => Category::ExtraMemory,
         v if (v & 0x0C00_0000) == 0x0400_0000 => Category::Memory,
         v if (v & 0x0C00_0000) == 0x0000_0000 => Category::DataProcessing,
+        v if (v & 0x0E00_0000) == 0x0800_0000 => Category::MultiLoadAndStore, // LDM and STM,
         // v if (v & 0x0F00_0000) == 0x0F00_0000 => Category::SWI,
         _ => panic!("Unsupported instruction"),
     };
@@ -393,6 +409,7 @@ pub fn decode(raw: Word) -> Box<Decoder> {
         Category::ExtraMemory => decode_extra_memory(raw),
         Category::DataProcessing => decode_data_processing(raw),
         Category::Branch => decode_branch(raw),
+        Category::MultiLoadAndStore => decode_multi_load_and_store(raw),
         // v if (v & 0x0F00_0000) == 0x0F00_0000 => Opcode::SWI,
         _ => panic!("unsupported instruction"),
     };
