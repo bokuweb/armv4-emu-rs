@@ -5,11 +5,11 @@ use super::Raw;
 pub struct Rom(Vec<u8>);
 
 impl Rom {
-    pub fn new(size: usize, init: Vec<u8>) -> Self {
-        let mut buf = vec![0; size];
+    pub fn new(size: usize, mut init: Vec<u8>) -> Self {
+        let buf = vec![0; size];
         let len = init.len();
-        init.clone().extend(&buf[len..]);
-        Rom(init.clone())
+        init.extend(&buf[len..]);
+        Rom(init)
     }
 }
 

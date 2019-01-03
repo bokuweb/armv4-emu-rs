@@ -414,6 +414,7 @@ pub fn decode(raw: Word) -> Box<Decoder> {
         _ => panic!("unsupported instruction"),
     };
 
+    debug!("opcode = {:?}", opcode);
     let dec = BaseDecoder { raw, cond, opcode };
     match category {
         Category::Multiple => Box::new(MultipleDecoder(dec)),

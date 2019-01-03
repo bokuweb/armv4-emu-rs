@@ -156,6 +156,7 @@ where
         debug!("registers = {:?}", self.gpr);
         match self.state {
             CpuState::ARM => {
+                debug!("fetch addr = 0x{:x}", self.gpr[PC] - (PC_OFFSET * 4) as u32);
                 let fetched = self.bus
                     .borrow()
                     .read_word(self.gpr[PC] - (PC_OFFSET * 4) as u32);
