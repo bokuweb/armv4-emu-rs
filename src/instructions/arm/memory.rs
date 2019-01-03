@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bus::Bus;
-use decoder::arm;
+use decoder::arm::Decoder;
 use types::*;
 use constants::*;
 
@@ -12,7 +12,7 @@ use super::shift::shift;
 
 fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
-    dec: &arm::Decoder,
+    dec: &Decoder,
     load_or_store: F,
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -52,7 +52,7 @@ where
 #[allow(non_snake_case)]
 pub fn exec_ldr<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -66,7 +66,7 @@ where
 #[allow(non_snake_case)]
 pub fn exec_ldrb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -79,7 +79,7 @@ where
 
 pub fn exec_str<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -92,7 +92,7 @@ where
 
 pub fn exec_strb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where

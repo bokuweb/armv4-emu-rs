@@ -6,14 +6,14 @@ use error::ArmError;
 
 use super::shift::{is_carry_over, lsl, ror, shift};
 use bus::Bus;
-use decoder::arm;
+use decoder::arm::Decoder;
 use registers::psr::PSR;
 use types::*;
 use constants::*;
 
 pub fn exec_data_processing<F>(
     gpr: &mut [Word; 16],
-    dec: &arm::Decoder,
+    dec: &Decoder,
     data_process: &mut F,
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -47,7 +47,7 @@ where
 
 pub fn exec_mov<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -60,7 +60,7 @@ where
 
 pub fn exec_and<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -73,7 +73,7 @@ where
 
 pub fn exec_eor<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -86,7 +86,7 @@ where
 
 pub fn exec_sub<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -99,7 +99,7 @@ where
 
 pub fn exec_rsb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -112,7 +112,7 @@ where
 
 pub fn exec_add<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -125,7 +125,7 @@ where
 
 pub fn exec_adc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -141,7 +141,7 @@ where
 
 pub fn exec_sbc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -157,7 +157,7 @@ where
 
 pub fn exec_rsc<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -173,7 +173,7 @@ where
 
 pub fn exec_tst<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &mut PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -192,7 +192,7 @@ where
 
 pub fn exec_teq<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &mut PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -211,7 +211,7 @@ where
 
 pub fn exec_cmp<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &mut PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -232,7 +232,7 @@ where
 
 pub fn exec_cmn<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &mut PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -252,7 +252,7 @@ where
 
 pub fn exec_orr<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -265,7 +265,7 @@ where
 
 pub fn exec_shift<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -278,7 +278,7 @@ where
 
 pub fn exec_bic<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -291,7 +291,7 @@ where
 
 pub fn exec_mvn<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -302,7 +302,7 @@ where
 
 pub fn exec_rrx<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::Decoder,
+    dec: &Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
