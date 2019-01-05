@@ -14,7 +14,7 @@ use types::*;
 
 pub fn exec_multiple<F>(
     gpr: &mut [Word; 16],
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     multiple: &mut F,
 ) -> Result<PipelineStatus, ArmError>
 where
@@ -30,7 +30,7 @@ where
 
 pub fn exec_mul<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -44,7 +44,7 @@ where
 
 pub fn exec_mla<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -59,7 +59,7 @@ where
 
 pub fn exec_umull<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -75,7 +75,7 @@ where
 
 pub fn exec_umlal<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -93,7 +93,7 @@ where
 
 pub fn exec_smull<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>
@@ -109,7 +109,7 @@ where
 
 pub fn exec_smlal<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &arm::BaseDecoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
     cspr: &PSR,
 ) -> Result<PipelineStatus, ArmError>

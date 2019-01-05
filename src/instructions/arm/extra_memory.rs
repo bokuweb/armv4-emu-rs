@@ -3,30 +3,25 @@ use std::rc::Rc;
 
 use bus::Bus;
 use constants::*;
-use decoder::arm::Decoder;
+use decoder::arm;
 use types::*;
 
 use super::super::PipelineStatus;
-use super::shift::shift;
 use error::ArmError;
 
-fn exec_memory_processing<F>(
+fn exec_ex_memory_processing<F>(
     gpr: &mut [u32; 16],
-    dec: &Decoder,
+    dec: &arm::Decoder,
     load_or_store: F,
 ) -> Result<PipelineStatus, ArmError>
 where
     F: Fn(&mut [u32; 16], u32),
 {
     let mut base = gpr[dec.get_Rn()];
-    // INFO: Treat as imm12 if not I.
-    let offset = if !dec.has_I() {
-        dec.get_src2() as u32
+    let offset = if dec.has_I() {
+        dec.get_imm8()
     } else {
-        let rm = dec.get_Rm() as usize;
-        let sh = dec.get_sh();
-        let shamt5 = dec.get_shamt5();
-        shift(sh, gpr[rm], shamt5)
+        gpr[dec.get_Rm() as usize]
     };
     let offset_base = if dec.is_plus_offset() {
         (base + offset) as Word
@@ -42,63 +37,66 @@ where
     } else if dec.is_write_back() {
         gpr[dec.get_Rn()] = base;
     }
-    if dec.get_Rd() == PC && dec.is_load() {
+    if dec.get_Rd() == PC {
         Ok(PipelineStatus::Flush)
     } else {
         Ok(PipelineStatus::Continue)
     }
 }
 
-#[allow(non_snake_case)]
-pub fn exec_ldr<T>(
+pub fn exec_strh<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &Decoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, dec, |gpr, base| {
-        gpr[dec.get_Rd()] = bus.borrow().read_word(base);
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        bus.borrow_mut()
+            .write_word(base, gpr[dec.get_Rd()] & 0xFFFF);
     })
 }
 
 #[allow(non_snake_case)]
-pub fn exec_ldrb<T>(
+pub fn exec_ldrh<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &Decoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, dec, |gpr, base| {
-        gpr[dec.get_Rd()] = bus.borrow().read_byte(base) as Word;
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = bus.borrow().read_word(base) & 0xFFFF;
     })
 }
 
-pub fn exec_str<T>(
+#[allow(non_snake_case)]
+pub fn exec_ldrsb<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &Decoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, dec, |gpr, base| {
-        bus.borrow_mut().write_word(base, gpr[dec.get_Rd()]);
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = bus.borrow().read_byte(base) as i8 as i32 as u32;
     })
 }
 
-pub fn exec_strb<T>(
+#[allow(non_snake_case)]
+pub fn exec_ldrsh<T>(
     bus: &Rc<RefCell<T>>,
-    dec: &Decoder,
+    dec: &arm::Decoder,
     gpr: &mut [Word; 16],
 ) -> Result<PipelineStatus, ArmError>
 where
     T: Bus,
 {
-    exec_memory_processing(gpr, dec, |gpr, base| {
-        bus.borrow_mut().write_byte(base, gpr[dec.get_Rd()] as Byte);
+    exec_ex_memory_processing(gpr, dec, |gpr, base| {
+        gpr[dec.get_Rd()] = (bus.borrow().read_word(base) & 0xFFFF) as i16 as i32 as u32;
     })
 }
+

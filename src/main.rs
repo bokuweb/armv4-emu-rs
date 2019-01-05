@@ -1,4 +1,3 @@
-
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
@@ -8,17 +7,19 @@ extern crate goblin;
 extern crate log;
 extern crate byteorder;
 
+mod bus;
 mod constants;
 mod core;
-mod bus;
 mod decoder;
+mod error;
 mod instructions;
 mod memory;
 mod registers;
 mod types;
-mod error;
 
+use bus::Bus;
 use constants::*;
+use error::*;
 use memory::ram::Ram;
 use memory::readable::*;
 use memory::rom::Rom;
@@ -26,8 +27,6 @@ use memory::writable::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use types::*;
-use bus::Bus;
-use error::*;
 
 use std::env;
 use std::fs::File;
@@ -41,12 +40,14 @@ struct CpuBus {
 
 impl Bus for CpuBus {
     fn read_byte(&self, addr: u32) -> Byte {
+        debug!("read byte addr = {:x}", addr);
         match addr {
             0x0000_0000...0x0007_FFFF => self.rom.borrow().read_byte(addr),
             _ => panic!("TODO: "),
         }
     }
     fn read_word(&self, addr: u32) -> Word {
+        debug!("read word addr = {:x}", addr);
         match addr {
             0x0000_0000...0x0007_FFFF => self.rom.borrow().read_word(addr),
             _ => panic!("TODO: "),
@@ -64,7 +65,7 @@ impl Bus for CpuBus {
             0x0000_0000...0x0007_FFFF => self.rom.borrow().read_word(addr),
             _ => panic!("TODO: "),
         };
-    }    
+    }
 }
 
 impl CpuBus {
@@ -94,6 +95,12 @@ fn main() {
     let mut arm = core::ARMv4::new(Rc::new(RefCell::new(bus)));
     arm.tick();
     println!("{:?}", arm.get_gpr(0));
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
+    arm.tick();
     arm.tick();
     arm.tick();
     arm.tick();
