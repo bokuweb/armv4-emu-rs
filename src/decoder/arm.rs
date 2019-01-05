@@ -95,11 +95,14 @@ pub struct BaseDecoder {
 
 #[derive(Debug)]
 pub struct MultipleDecoder(BaseDecoder);
+#[derive(Debug)]
 pub struct ExtraMemoryDecoder(BaseDecoder);
+// #[derive(Debug)]
+// pub struct MultiLoadAndStoreDecoder(BaseDecoder);
 
 // pub const RAW_NOP: Word = 0b0000_00_0_1101_0_0000_0000_00000000_0000;
 
-fn is_load(raw: Word) -> bool {
+pub fn is_load(raw: Word) -> bool {
     raw & 0x0010_0000 != 0
 }
 
@@ -165,6 +168,10 @@ pub trait Decoder: Raw {
 
     fn is_write_back(&self) -> bool {
         (self.raw() & (1 << 21)) != 0
+    }
+
+    fn is_load(&self) -> bool {
+        is_load(self.raw())
     }
 
     #[allow(non_snake_case)]
@@ -235,6 +242,8 @@ pub trait Decoder: Raw {
 
 impl Decoder for BaseDecoder {}
 
+// impl Decoder for MultiLoadAndStoreDecoder {}
+
 impl Decoder for MultipleDecoder {
     #[allow(non_snake_case)]
     fn get_Ra(&self) -> usize {
@@ -267,6 +276,13 @@ impl Decoder for ExtraMemoryDecoder {
     }
 }
 
+// impl MultiLoadAndStoreDecoder {
+//     #[allow(non_snake_case)]
+//     fn get_register_list(&self) -> usize {
+//         (self.raw() & 0xFFFF) as usize
+//     }
+// }
+
 impl Raw for BaseDecoder {
     fn raw(&self) -> u32 {
         self.raw
@@ -296,6 +312,16 @@ impl Raw for ExtraMemoryDecoder {
         self.0.opcode.clone()
     }
 }
+
+// impl Raw for MultiLoadAndStoreDecoder {
+//     fn raw(&self) -> u32 {
+//         self.0.raw
+//     }
+//
+//     fn op(&self) -> Opcode {
+//         self.0.opcode.clone()
+//     }
+// }
 
 fn decode_multiple(raw: Word) -> Opcode {
     let cmd = (raw & 0x01E0_0000) >> 21;

@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bus::Bus;
+use constants::*;
 use decoder::arm::Decoder;
 use types::*;
-use constants::*;
 
-use error::ArmError;
 use super::super::PipelineStatus;
 use super::shift::shift;
+use error::ArmError;
 
 fn exec_memory_processing<F>(
     gpr: &mut [u32; 16],
@@ -42,7 +42,7 @@ where
     } else if dec.is_write_back() {
         gpr[dec.get_Rn()] = base;
     }
-    if dec.get_Rd() == PC {
+    if dec.get_Rd() == PC && dec.is_load() {
         Ok(PipelineStatus::Flush)
     } else {
         Ok(PipelineStatus::Continue)
